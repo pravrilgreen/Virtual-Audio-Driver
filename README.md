@@ -114,7 +114,7 @@ Once installed:
 2. **Clone the Repo**  
    ```powershell
    git clone https://github.com/VirtualDisplay/Virtual-Audio-Driver.git
-   cd VirtualAudioDriver
+   cd Virtual-Audio-Driver
    ```
 
 3. **Open the Driver Solution**  
