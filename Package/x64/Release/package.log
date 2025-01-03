@@ -1,0 +1,15 @@
+﻿  Building 'package' with toolset 'WindowsKernelModeDriver10.0' and the 'Desktop' target platform.
+  ........................
+  Signability test complete.
+  
+  Errors:
+  None
+  
+  Warnings:
+  None
+  
+  Catalog generation complete.
+  E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\x64\Release\package\simpleaudiosample.cat
+  Done Adding Additional Store
+  Successfully signed: E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\x64\Release\package\simpleaudiosample.cat
+  

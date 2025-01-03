@@ -1,0 +1,1 @@
+E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\Source\Main\x64\Release\SimpleAudioSample.sys

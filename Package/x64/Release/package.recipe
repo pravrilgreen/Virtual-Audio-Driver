@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\Source\Main\x64\Release\SimpleAudioSample.sys</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\x64\Release\package</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>
