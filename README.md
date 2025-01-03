@@ -63,7 +63,7 @@ By installing this driver, any audio that targets this virtual speaker can be pr
    - Right-click on the `.inf` file and choose “Install.”
    - OR open an elevated command prompt and run:
      ```powershell
-     pnputil /add-driver .\VirtualAudioDriver.inf /install
+     pnputil /add-driver .\SimpleAudioSample.inf /install
      ```
 
 3. **Reboot** (if prompted)  
