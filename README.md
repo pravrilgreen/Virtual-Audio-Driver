@@ -1,4 +1,5 @@
-# Please note: This software is in beta and requires test signing to be enabled.
+# Please note
+# This software is in beta and requires test signing to be enabled.
 
 # Virtual Audio Driver by MikeTheTech
 
