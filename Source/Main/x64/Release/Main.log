@@ -1,9 +1,7 @@
 ﻿  Building 'Main' with toolset 'WindowsKernelModeDriver10.0' and the 'Windows Driver' target platform.
   Stamping x64\Release\SimpleAudioSample.inf
-  Stamping [Version] section with DriverVer=01/02/2025,21.19.49.50
+  Stamping [Version] section with DriverVer=01/02/2025,21.55.43.463
   adapter.cpp
-  minwavert.cpp
-  Generating Code...
   Main.vcxproj -> E:\GitHub\Virtual-Audio-Driver\Source\Main\x64\Release\SimpleAudioSample.sys
   Done Adding Additional Store
   Successfully signed: E:\GitHub\Virtual-Audio-Driver\Source\Main\x64\Release\SimpleAudioSample.sys
