@@ -8,23 +8,6 @@ Welcome to the **Virtual Audio Driver by MikeTheTech**! This project provides tw
 
 Both features in the driver are suitable for remote desktop sessions, headless configurations, streaming setups, and more. They support Windows 10 and Windows 11, including advanced audio features like Windows Sonic (Spatial Sound), Exclusive Mode, Application Priority, and volume control.
 
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Key Features](#key-features)
-3. [Compatibility](#compatibility)
-4. [Installation](#installation)
-5. [Usage](#usage)
-   - [Using the Virtual Speaker](#using-the-virtual-speaker)
-   - [Using the Virtual Microphone](#using-the-virtual-microphone)
-6. [Configuration](#configuration)
-7. [Building from Source](#building-from-source)
-8. [Future Plans](#future-plans)
-
----
-
 ## Overview
 
 A virtual audio driver set consists of:
@@ -55,8 +38,7 @@ By installing these drivers, you can process or forward audio without physical h
 ## Compatibility
 
 - **OS**: Windows 10 (Build 1903 and above) and Windows 11  
-- **Architecture**: x64 (tested); ARM64 support under consideration  
-- **Framework**: Windows Driver Kit (WDK)
+- **Architecture**: x64 (tested); ARM64  
 
 ---
 
@@ -144,36 +126,8 @@ By installing these drivers, you can process or forward audio without physical h
 
 ---
 
-## Building from Source
-
-1. **Prerequisites**  
-   - Windows Driver Kit (WDK) installed  
-   - Visual Studio (2019 or later)  
-   - Optional: Windows SDK matching your target OS
-
-2. **Clone the Repo**  
-   ```powershell
-   git clone https://github.com/VirtualDisplay/Virtual-Audio-Driver.git
-   cd Virtual-Audio-Driver
-   ```
-
-3. **Open the Driver Solution**  
-   - Launch Visual Studio.  
-   - Open the `.sln` file within the repository.
-
-4. **Build**  
-   - Select **Release** or **Debug** configuration.  
-   - Right-click the project in Solution Explorer and choose **Build**.
-
-5. **Sign the Driver** (Optional/Recommended)  
-   - Use your own code signing certificate or a test certificate for development.  
-   - Ensure your system is in test mode if using a test certificate.
-
----
-
 ## Future Plans
 
-- **ARM64** compatibility  
 - **Advanced Diagnostics**: Logging and debugging tools  
 - **New Modes & Additional Formats**: Continued expansion of supported audio qualities.  
 - **Additional Features**: Such as Automatic Volume Leveling (AVL), further spatial audio improvements, and custom routing tools.
