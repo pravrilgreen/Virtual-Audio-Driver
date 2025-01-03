@@ -2,10 +2,10 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\Source\Main\x64\Release\SimpleAudioSample.sys</FullPath>
+      <FullPath>E:\GitHub\Virtual-Audio-Driver\Source\Main\x64\Release\SimpleAudioSample.sys</FullPath>
     </ProjectOutput>
     <ProjectOutput>
-      <FullPath>E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\x64\Release\package</FullPath>
+      <FullPath>E:\GitHub\Virtual-Audio-Driver\x64\Release\package</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

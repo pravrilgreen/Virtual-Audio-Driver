@@ -1,1 +1,2 @@
 E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\Source\Filters\x64\Release\Filters.lib
+E:\GitHub\Virtual-Audio-Driver\Source\Filters\x64\Release\Filters.lib

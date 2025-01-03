@@ -3,12 +3,20 @@
   "WorkspaceRootPath": "E:\\GitHub\\Virtual-Audio-Driver\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\SimpleAudioSample.inx||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|solutionrelative:Source\\Main\\SimpleAudioSample.inx||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{771312CF-E5A2-4676-8142-86CEBDF99E2B}|Source\\Filters\\Filters.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Filters\\micarraywavtable.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{771312CF-E5A2-4676-8142-86CEBDF99E2B}|Source\\Filters\\Filters.vcxproj|solutionrelative:Source\\Filters\\micarraywavtable.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\adapter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|solutionrelative:Source\\Main\\adapter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\newdelete.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|solutionrelative:Source\\Main\\newdelete.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\SimpleAudioSample.inx||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}|Source\\Main\\Main.vcxproj|solutionrelative:Source\\Main\\SimpleAudioSample.inx||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{33E61864-6F2C-4F9F-BE70-8F8985A4F283}|Source\\Utilities\\Utilities.vcxproj|E:\\GitHub\\Virtual-Audio-Driver\\Source\\Utilities\\tonegenerator.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -38,21 +46,47 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 0,
           "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "micarraywavtable.h",
+              "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Filters\\micarraywavtable.h",
+              "RelativeDocumentMoniker": "Source\\Filters\\micarraywavtable.h",
+              "ToolTip": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Filters\\micarraywavtable.h",
+              "RelativeToolTip": "Source\\Filters\\micarraywavtable.h",
+              "ViewState": "AgIAAAABAAAAAAAAAAAowA0BAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-01-03T05:18:26.819Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "newdelete.cpp",
+              "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\NewDelete.cpp",
+              "RelativeDocumentMoniker": "Source\\Main\\NewDelete.cpp",
+              "ToolTip": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\NewDelete.cpp",
+              "RelativeToolTip": "Source\\Main\\NewDelete.cpp",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-01-03T05:18:04.531Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{269a02dc-6af8-11d3-bdc4-00c04f688e50}"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 3,
               "Title": "SimpleAudioSample.inx",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\SimpleAudioSample.inx",
               "RelativeDocumentMoniker": "Source\\Main\\SimpleAudioSample.inx",
               "ToolTip": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\SimpleAudioSample.inx",
               "RelativeToolTip": "Source\\Main\\SimpleAudioSample.inx",
-              "ViewState": "AgIAAG4AAAAAAAAAAAAAAIAAAABlAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAAdAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2025-01-03T03:52:31.746Z",
               "EditorCaption": ""
@@ -65,13 +99,14 @@
               "RelativeDocumentMoniker": "Source\\Main\\adapter.cpp",
               "ToolTip": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\adapter.cpp",
               "RelativeToolTip": "Source\\Main\\adapter.cpp",
-              "ViewState": "AgIAAE0DAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAcAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-01-03T03:51:10.328Z"
+              "WhenOpened": "2025-01-03T03:51:10.328Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "tonegenerator.cpp",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Utilities\\ToneGenerator.cpp",
               "RelativeDocumentMoniker": "Source\\Utilities\\ToneGenerator.cpp",
@@ -83,7 +118,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 5,
               "Title": "savedata.cpp",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Utilities\\savedata.cpp",
               "RelativeDocumentMoniker": "Source\\Utilities\\savedata.cpp",
@@ -95,7 +130,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 6,
               "Title": "kshelper.cpp",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Utilities\\kshelper.cpp",
               "RelativeDocumentMoniker": "Source\\Utilities\\kshelper.cpp",
@@ -107,7 +142,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 7,
               "Title": "hw.cpp",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Utilities\\hw.cpp",
               "RelativeDocumentMoniker": "Source\\Utilities\\hw.cpp",
@@ -119,7 +154,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 8,
               "Title": "SimpleAudioSample.rc",
               "DocumentMoniker": "E:\\GitHub\\Virtual-Audio-Driver\\Source\\Main\\SimpleAudioSample.rc",
               "RelativeDocumentMoniker": "Source\\Main\\SimpleAudioSample.rc",
