@@ -113,7 +113,7 @@ Both the Virtual Speaker Driver and the Virtual Microphone Driver install simila
      - **16-bit, 48,000 Hz**
      - **24-bit, 96,000 Hz**
      - **24-bit, 192,000 Hz**
-     - **32-bit, 4,800 Hz**
+     - **32-bit, 48,000 Hz**
 
 3. **Use Cases**
    - **Voice Chat / Conference Apps**: Emulate or inject audio into Zoom, Teams, Discord, etc.
