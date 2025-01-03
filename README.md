@@ -113,7 +113,7 @@ Once installed:
 
 2. **Clone the Repo**  
    ```powershell
-   git clone https://github.com/YourUsername/VirtualAudioDriver.git
+   git clone https://github.com/VirtualDisplay/VirtualAudioDriver.git
    cd VirtualAudioDriver
    ```
 
