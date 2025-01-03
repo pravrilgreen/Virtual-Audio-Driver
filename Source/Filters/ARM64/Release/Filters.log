@@ -1,0 +1,4 @@
+﻿  Building 'Filters' with toolset 'WindowsKernelModeDriver10.0' and the 'Windows Driver' target platform.
+  micarraytopo.cpp
+  speakertopo.cpp
+  Filters.vcxproj -> E:\GitHub\Virtual-Audio-Driver\Source\Filters\ARM64\Release\Filters.lib

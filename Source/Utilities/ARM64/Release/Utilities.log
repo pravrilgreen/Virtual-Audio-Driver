@@ -1,0 +1,6 @@
+﻿  Building 'Utilities' with toolset 'WindowsKernelModeDriver10.0' and the 'Windows Driver' target platform.
+  hw.cpp
+  kshelper.cpp
+  savedata.cpp
+  tonegenerator.cpp
+  Utilities.vcxproj -> E:\GitHub\Virtual-Audio-Driver\Source\Utilities\ARM64\Release\Utilities.lib
