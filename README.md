@@ -42,8 +42,8 @@ By installing these driver, you can process or forward audio without physical ha
 | Feature                                      | Virtual Speaker                                                                                | Virtual Microphone                                                                                                                              |
 |----------------------------------------------|-------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Emulated Device**                          | Emulates a speaker device recognized by Windows.                                               | Emulates a microphone device recognized by Windows.                                                                                             |
-| **Supported Audio Formats**                  | Standard Windows formats.                                                                      | **16-bit 44,100 Hz**, **16-bit 48,000 Hz**, **24-bit 96,000 Hz**, **24-bit 192,000 Hz**, **32-bit 4,800 Hz** (for testing or specialized scenarios). |
-| **Spatial Sound Support** (Speaker Only)     | Integrates with Windows Sonic, enabling immersive 3D audio features.                            | N/A                                                                                                                                              |
+| **Supported Audio Formats**                  | **16-bit 48,000 Hz**.                                                                         | **16-bit 44,100 Hz**, **16-bit 48,000 Hz**, **24-bit 96,000 Hz**, **24-bit 192,000 Hz**, **32-bit 4,800 Hz** (for testing or specialized scenarios). |
+| **Spatial Sound Support** (Speaker Only)     | Integrates with Windows Sonic, enabling immersive 3D audio features.                            | Integrated with Audio Enhancements such as Voice Focus and Background Noise Reduction.                                                          |
 | **Exclusive Mode and App Priority**          | Applications can claim exclusive control of the device.                                        | Same WDK architecture applies, allowing exclusive access in supported workflows.                                                                 |
 | **Volume Level Handling**                    | Handles global and per-application volume changes (Windows mixer).                              | Microphone level adjustments accessible via Windows Sound Settings or audio software.                                                            |
 | **High Customizability**                     | Built to be extended with future features and audio enhancements.                               | Allows flexible configuration of sampling rates and bit depths for specialized audio requirements.                                               |
@@ -59,8 +59,6 @@ By installing these driver, you can process or forward audio without physical ha
 ---
 
 ## Installation
-
-Both the Virtual Speaker Driver and the Virtual Microphone Driver install similarly. If provided separately, you will have two \`.inf\` files—one for each device. If combined into a single \`.inf\`, the process is still the same.
 
 1. **Enable Test Signing (Optional)**
    If you have a test-signed driver, you may need to enable test signing mode:
