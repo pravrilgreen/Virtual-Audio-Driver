@@ -9,6 +9,8 @@ Welcome to the **Virtual Audio Driver by MikeTheTech**! This project provides tw
 Both features in the driver are suitable for remote desktop sessions, headless configurations, streaming setups, and more. They support Windows 10 and Windows 11, including advanced audio features like Windows Sonic (Spatial Sound), Exclusive Mode, Application Priority, and volume control.
 
 ![image](https://github.com/user-attachments/assets/1e833f96-5565-4938-a242-b239074012b0)
+![image](https://github.com/user-attachments/assets/db8c23f3-cf2d-409f-ada8-38d0aa8450a8)![image](https://github.com/user-attachments/assets/8cf14cc2-4ab0-41ad-a6b2-5a77b004a943)
+
 
 ## Overview
 
