@@ -62,7 +62,7 @@ By installing these drivers, you can process or forward audio without physical h
    - Right-click on the `.inf` file and choose “Install.”  
    - OR open an elevated command prompt and run:
      ```powershell
-     pnputil /add-driver .\SimpleAudioSample.inf /install
+     pnputil /add-driver .\VirtualAudioDriver.inf /install
      ```
 
 3. **Reboot** (if prompted)  

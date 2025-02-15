@@ -45,8 +45,8 @@ Abstract:
 #define DEFAULT_BUFFER_SIZE         DEFAULT_FRAME_SIZE * DEFAULT_FRAME_COUNT
 
 #define DEFAULT_FILE_FOLDER1        L"\\DriverData\\Audio_Samples"
-#define DEFAULT_FILE_FOLDER2        L"\\DriverData\\Audio_Samples\\SimpleAudioSample"
-#define DEFAULT_FILE_NAME           L"\\DriverData\\Audio_Samples\\SimpleAudioSample\\STREAM"
+#define DEFAULT_FILE_FOLDER2        L"\\DriverData\\Audio_Samples\\VirtualAudioDriver"
+#define DEFAULT_FILE_NAME           L"\\DriverData\\Audio_Samples\\VirtualAudioDriver\\STREAM"
 #define OFFLOAD_FILE_NAME           L"OFFLOAD"
 #define HOST_FILE_NAME              L"HOST"
 

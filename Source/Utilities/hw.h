@@ -13,8 +13,8 @@ Abstract:
     for the topology.
 --*/
 
-#ifndef _SIMPLEAUDIOSAMPLE_HW_H_
-#define _SIMPLEAUDIOSAMPLE_HW_H_
+#ifndef _VIRTUALAUDIODRIVER_HW_H_
+#define _VIRTUALAUDIODRIVER_HW_H_
 
 //=============================================================================
 // Defines
@@ -26,11 +26,11 @@ Abstract:
 // Classes
 //=============================================================================
 ///////////////////////////////////////////////////////////////////////////////
-// CSimpleAudioSampleHW
+// CVirtualAudioDriverHW
 // This class represents virtual Simple Audio Sample HW. An array representing volume
 // registers and mute registers.
 
-class CSimpleAudioSampleHW
+class CVirtualAudioDriverHW
 {
 public:
 protected:
@@ -45,7 +45,7 @@ protected:
 private:
 
 public:
-    CSimpleAudioSampleHW();
+    CVirtualAudioDriverHW();
     
     void                        MixerReset();
     BOOL                        bGetDevSpecific();
@@ -100,6 +100,6 @@ public:
 protected:
 private:
 };
-typedef CSimpleAudioSampleHW    *PCSimpleAudioSampleHW;
+typedef CVirtualAudioDriverHW    *PCVirtualAudioDriverHW;
 
-#endif  // _SIMPLEAUDIOSAMPLE_HW_H_
+#endif  // _VIRTUALAUDIODRIVER_HW_H_

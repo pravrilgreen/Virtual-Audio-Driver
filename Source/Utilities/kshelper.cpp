@@ -156,20 +156,20 @@ Return Value:
 //-----------------------------------------------------------------------------
 #pragma code_seg("PAGE")
 NTSTATUS
-SimpleAudioSamplePropertyDispatch
+VirtualAudioDriverPropertyDispatch
 (
     _In_ PPCPROPERTY_REQUEST PropertyRequest
 )
 /*++
-    Handles and dispatches a SIMPLEAUDIOSAMPLE_PROPERTY_ITEM.
+    Handles and dispatches a VIRTUALAUDIODRIVER_PROPERTY_ITEM.
 
     Use this as the property handler only if the property item is a
-    SIMPLEAUDIOSAMPLE_PROPERTY_ITEM.
+    VIRTUALAUDIODRIVER_PROPERTY_ITEM.
 --*/
 {
     PAGED_CODE();
 
-    SIMPLEAUDIOSAMPLE_PROPERTY_ITEM* item = (SIMPLEAUDIOSAMPLE_PROPERTY_ITEM*)PropertyRequest->PropertyItem;
+    VIRTUALAUDIODRIVER_PROPERTY_ITEM* item = (VIRTUALAUDIODRIVER_PROPERTY_ITEM*)PropertyRequest->PropertyItem;
 
     if (PropertyRequest->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
     {

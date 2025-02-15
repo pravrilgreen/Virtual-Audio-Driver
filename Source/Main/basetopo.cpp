@@ -20,7 +20,7 @@ Abstract:
 
 //=============================================================================
 #pragma code_seg("PAGE")
-CMiniportTopologySimpleAudioSample::CMiniportTopologySimpleAudioSample
+CMiniportTopologyVirtualAudioDriver::CMiniportTopologyVirtualAudioDriver
 (
     _In_        PCFILTER_DESCRIPTOR    *FilterDesc,
     _In_        USHORT                  DeviceMaxChannels
@@ -55,9 +55,9 @@ Return Value:
     
     ASSERT(DeviceMaxChannels > 0);
     m_DeviceMaxChannels = DeviceMaxChannels;
-} // CMiniportTopologySimpleAudioSample
+} // CMiniportTopologyVirtualAudioDriver
 
-CMiniportTopologySimpleAudioSample::~CMiniportTopologySimpleAudioSample
+CMiniportTopologyVirtualAudioDriver::~CMiniportTopologyVirtualAudioDriver
 (
     void
 )
@@ -81,12 +81,12 @@ Return Value:
 
     SAFE_RELEASE(m_AdapterCommon);
     SAFE_RELEASE(m_PortEvents);
-} // ~CMiniportTopologySimpleAudioSample
+} // ~CMiniportTopologyVirtualAudioDriver
 
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CMiniportTopologySimpleAudioSample::DataRangeIntersection
+CMiniportTopologyVirtualAudioDriver::DataRangeIntersection
 ( 
     _In_  ULONG                 PinId,
     _In_  PKSDATARANGE          ClientDataRange,
@@ -146,7 +146,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CMiniportTopologySimpleAudioSample::GetDescription
+CMiniportTopologyVirtualAudioDriver::GetDescription
 ( 
     _Out_ PPCFILTER_DESCRIPTOR *  OutFilterDescriptor 
 )
@@ -183,7 +183,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CMiniportTopologySimpleAudioSample::Init
+CMiniportTopologyVirtualAudioDriver::Init
 ( 
     _In_  PUNKNOWN          UnknownAdapter_,
     _In_  PPORTTOPOLOGY     Port_ 
@@ -211,7 +211,7 @@ Return Value:
     ASSERT(UnknownAdapter_);
     ASSERT(Port_);
 
-    DPF_ENTER(("[CMiniportTopologySimpleAudioSample::Init]"));
+    DPF_ENTER(("[CMiniportTopologyVirtualAudioDriver::Init]"));
 
     NTSTATUS    ntStatus;
 
@@ -248,7 +248,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS                            
-CMiniportTopologySimpleAudioSample::PropertyHandlerGeneric
+CMiniportTopologyVirtualAudioDriver::PropertyHandlerGeneric
 (
     _In_  PPCPROPERTY_REQUEST     PropertyRequest
 )
@@ -317,7 +317,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS                            
-CMiniportTopologySimpleAudioSample::PropertyHandlerMuxSource
+CMiniportTopologyVirtualAudioDriver::PropertyHandlerMuxSource
 (
     _In_  PPCPROPERTY_REQUEST     PropertyRequest
 )
@@ -388,7 +388,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS                            
-CMiniportTopologySimpleAudioSample::PropertyHandlerDevSpecific(
+CMiniportTopologyVirtualAudioDriver::PropertyHandlerDevSpecific(
     _In_  PPCPROPERTY_REQUEST     PropertyRequest
 )
 /*++
@@ -613,7 +613,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 VOID
-CMiniportTopologySimpleAudioSample::AddEventToEventList
+CMiniportTopologyVirtualAudioDriver::AddEventToEventList
 (
     _In_  PKSEVENT_ENTRY    EventEntry 
 )
@@ -640,7 +640,7 @@ Arguments:
 //=============================================================================
 #pragma code_seg()
 VOID
-CMiniportTopologySimpleAudioSample::GenerateEventList
+CMiniportTopologyVirtualAudioDriver::GenerateEventList
 (
     _In_opt_    GUID   *Set,
     _In_        ULONG   EventId,
@@ -672,7 +672,7 @@ Arguments:
 
 --*/
 {
-    DPF_ENTER(("[CMiniportTopologySimpleAudioSample::GenerateEventList]"));
+    DPF_ENTER(("[CMiniportTopologyVirtualAudioDriver::GenerateEventList]"));
 
     ASSERT(m_PortEvents != NULL);
 

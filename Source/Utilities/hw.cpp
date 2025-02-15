@@ -16,12 +16,12 @@ Abstract:
 #include "hw.h"
 
 //=============================================================================
-// CSimpleAudioSampleHW
+// CVirtualAudioDriverHW
 //=============================================================================
 
 //=============================================================================
 #pragma code_seg("PAGE")
-CSimpleAudioSampleHW::CSimpleAudioSampleHW()
+CVirtualAudioDriverHW::CVirtualAudioDriverHW()
 : m_ulMux(0),
     m_bDevSpecific(FALSE),
     m_iDevSpecific(0),
@@ -30,7 +30,7 @@ CSimpleAudioSampleHW::CSimpleAudioSampleHW()
 
 Routine Description:
 
-    Constructor for SimpleAudioSampleHW. 
+    Constructor for VirtualAudioDriverHW. 
 
 Arguments:
 
@@ -43,13 +43,13 @@ Return Value:
     PAGED_CODE();
     
     MixerReset();
-} // SimpleAudioSampleHW
+} // VirtualAudioDriverHW
 #pragma code_seg()
 
 
 //=============================================================================
 BOOL
-CSimpleAudioSampleHW::bGetDevSpecific()
+CVirtualAudioDriverHW::bGetDevSpecific()
 /*++
 
 Routine Description:
@@ -71,7 +71,7 @@ Return Value:
 
 //=============================================================================
 void
-CSimpleAudioSampleHW::bSetDevSpecific
+CVirtualAudioDriverHW::bSetDevSpecific
 (
     _In_  BOOL                bDevSpecific
 )
@@ -96,7 +96,7 @@ Return Value:
 
 //=============================================================================
 INT
-CSimpleAudioSampleHW::iGetDevSpecific()
+CVirtualAudioDriverHW::iGetDevSpecific()
 /*++
 
 Routine Description:
@@ -118,7 +118,7 @@ Return Value:
 
 //=============================================================================
 void
-CSimpleAudioSampleHW::iSetDevSpecific
+CVirtualAudioDriverHW::iSetDevSpecific
 (
     _In_  INT                 iDevSpecific
 )
@@ -143,7 +143,7 @@ Return Value:
 
 //=============================================================================
 UINT
-CSimpleAudioSampleHW::uiGetDevSpecific()
+CVirtualAudioDriverHW::uiGetDevSpecific()
 /*++
 
 Routine Description:
@@ -165,7 +165,7 @@ Return Value:
 
 //=============================================================================
 void
-CSimpleAudioSampleHW::uiSetDevSpecific
+CVirtualAudioDriverHW::uiSetDevSpecific
 (
     _In_  UINT                uiDevSpecific
 )
@@ -191,7 +191,7 @@ Return Value:
 
 //=============================================================================
 BOOL
-CSimpleAudioSampleHW::GetMixerMute
+CVirtualAudioDriverHW::GetMixerMute
 (
     _In_  ULONG                   ulNode,
     _In_  ULONG                   ulChannel
@@ -226,7 +226,7 @@ Return Value:
 
 //=============================================================================
 ULONG                       
-CSimpleAudioSampleHW::GetMixerMux()
+CVirtualAudioDriverHW::GetMixerMux()
 /*++
 
 Routine Description:
@@ -246,7 +246,7 @@ Return Value:
 
 //=============================================================================
 LONG
-CSimpleAudioSampleHW::GetMixerVolume
+CVirtualAudioDriverHW::GetMixerVolume
 (   
     _In_  ULONG                   ulNode,
     _In_  ULONG                   ulChannel
@@ -281,7 +281,7 @@ Return Value:
 
 //=============================================================================
 LONG
-CSimpleAudioSampleHW::GetMixerPeakMeter
+CVirtualAudioDriverHW::GetMixerPeakMeter
 (   
     _In_  ULONG                   ulNode,
     _In_  ULONG                   ulChannel
@@ -317,7 +317,7 @@ Return Value:
 //=============================================================================
 #pragma code_seg("PAGE")
 void 
-CSimpleAudioSampleHW::MixerReset()
+CVirtualAudioDriverHW::MixerReset()
 /*++
 
 Routine Description:
@@ -350,7 +350,7 @@ Return Value:
 
 //=============================================================================
 void
-CSimpleAudioSampleHW::SetMixerMute
+CVirtualAudioDriverHW::SetMixerMute
 (
     _In_  ULONG                   ulNode,
     _In_  ULONG                   ulChannel,
@@ -386,7 +386,7 @@ Return Value:
 
 //=============================================================================
 void                        
-CSimpleAudioSampleHW::SetMixerMux
+CVirtualAudioDriverHW::SetMixerMux
 (
     _In_  ULONG                   ulNode
 )
@@ -411,7 +411,7 @@ Return Value:
 
 //=============================================================================
 void  
-CSimpleAudioSampleHW::SetMixerVolume
+CVirtualAudioDriverHW::SetMixerVolume
 (   
     _In_  ULONG                   ulNode,
     _In_  ULONG                   ulChannel,

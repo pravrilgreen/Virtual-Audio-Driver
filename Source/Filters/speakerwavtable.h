@@ -11,8 +11,8 @@ Abstract:
     Declaration of wave miniport tables for the render endpoints.
 --*/
 
-#ifndef _SIMPLEAUDIOSAMPLE_SPEAKERWAVTABLE_H_
-#define _SIMPLEAUDIOSAMPLE_SPEAKERWAVTABLE_H_
+#ifndef _VIRTUALAUDIODRIVER_SPEAKERWAVTABLE_H_
+#define _VIRTUALAUDIODRIVER_SPEAKERWAVTABLE_H_
 
 //=============================================================================
 // To support 16-bit and 24-bit, and sample rates from 48kHz up to 192kHz:
@@ -1039,4 +1039,4 @@ PCFILTER_DESCRIPTOR SpeakerWaveMiniportFilterDescriptor =
     NULL                                            // Categories  - use defaults (audio, render, capture)
 };
 
-#endif // _SIMPLEAUDIOSAMPLE_SPEAKERWAVTABLE_H_
+#endif // _VIRTUALAUDIODRIVER_SPEAKERWAVTABLE_H_

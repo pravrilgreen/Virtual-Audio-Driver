@@ -21,7 +21,7 @@ Abstract:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CreateMiniportTopologySimpleAudioSample
+CreateMiniportTopologyVirtualAudioDriver
 ( 
     _Out_           PUNKNOWN *                              Unknown,
     _In_            REFCLSID,
@@ -80,7 +80,7 @@ Return Value:
     *Unknown = reinterpret_cast<IUnknown*>(obj);
 
     return STATUS_SUCCESS;
-} // CreateMiniportTopologySimpleAudioSample
+} // CreateMiniportTopologyVirtualAudioDriver
 
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -156,7 +156,7 @@ Return Value:
     PAGED_CODE();
 
     return 
-        CMiniportTopologySimpleAudioSample::DataRangeIntersection
+        CMiniportTopologyVirtualAudioDriver::DataRangeIntersection
         (
             PinId,
             ClientDataRange,
@@ -197,7 +197,7 @@ Return Value:
 
     ASSERT(OutFilterDescriptor);
 
-    return CMiniportTopologySimpleAudioSample::GetDescription(OutFilterDescriptor);        
+    return CMiniportTopologyVirtualAudioDriver::GetDescription(OutFilterDescriptor);        
 } // GetDescription
 
 //=============================================================================
@@ -245,7 +245,7 @@ Return Value:
     NTSTATUS                    ntStatus;
 
     ntStatus = 
-        CMiniportTopologySimpleAudioSample::Init
+        CMiniportTopologyVirtualAudioDriver::Init
         (
             UnknownAdapter,
             Port_
@@ -253,7 +253,7 @@ Return Value:
 
     IF_FAILED_ACTION_JUMP(
         ntStatus,
-        DPF(D_ERROR, ("Init: CMiniportTopologySimpleAudioSample::Init failed, 0x%x", ntStatus)),
+        DPF(D_ERROR, ("Init: CMiniportTopologyVirtualAudioDriver::Init failed, 0x%x", ntStatus)),
         Done);
 
 Done:
