@@ -1,2 +1,0 @@
-E:\GitHub\Windows-driver-samples\audio\simpleaudiosample\Source\Main\x64\Release\SimpleAudioSample.sys
-E:\GitHub\Virtual-Audio-Driver\Source\Main\x64\Release\SimpleAudioSample.sys

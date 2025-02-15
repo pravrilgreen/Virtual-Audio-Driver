@@ -1,1 +1,0 @@
-E:\GitHub\Virtual-Audio-Driver\Source\Filters\ARM64\Release\Filters.lib
