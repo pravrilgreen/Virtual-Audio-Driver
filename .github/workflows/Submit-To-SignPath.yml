@@ -35,10 +35,10 @@ jobs:
 
       - name: Build the driver
         run: |
-          msbuild "MTTVDD.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }}
+          msbuild "VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }}
 
       - name: List build directory
-        run: dir "Source\Main\${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver"
+        run: dir "${{ matrix.platform }}\${{ matrix.configuration }}"
 
       - name: Upload built driver
         id: upload_artifact
@@ -46,9 +46,8 @@ jobs:
         with:
           name: Built-Driver-${{ matrix.configuration }}-${{ matrix.platform }}
           path: |
-            Source\Main\${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver\VirtualAudioDriver.sys
-            Source\Main\${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver\VirtualAudioDriver.inf
-            Source\Main\${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver\vdd_settings.xml
+            ${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver.sys
+            ${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver.inf
 
       - name: Generate release tag
         id: generate_tag
@@ -61,7 +60,7 @@ jobs:
           echo "Generated Release Tag: ${{ env.RELEASE_TAG }}"
             
       - name: Verify Built Artifacts
-        run: dir 'Source\Main\${{ matrix.platform }}\${{ matrix.configuration }}\VirtualAudioDriver'
+        run: dir '${{ matrix.platform }}\${{ matrix.configuration }}'
 
       - name: Submit signing request to SignPath
         id: signpath_request
@@ -89,47 +88,10 @@ jobs:
           path: |
             ${{ vars.SIGNPATH_OUTPUT_DIR }}\VirtualAudioDriver.sys
             ${{ vars.SIGNPATH_OUTPUT_DIR }}\VirtualAudioDriver.inf
-            ${{ vars.SIGNPATH_OUTPUT_DIR }}\vdd_settings.xml
-            
-      - name: Prepare Setup Repository
-        run: |
-          git clone https://${{ secrets.READ_REPO }}@github.com/VirtualDisplay/Virtual-Driver-Installer.git inno-setup 
-
-      - name: Prepare Setup 
-        run: |
-          copy "${{ vars.SIGNPATH_OUTPUT_DIR }}\*" inno-setup\input\
-          $platform = "${{ matrix.platform }}"
-          (Get-Content "inno-setup\Setup.iss") | 
-            ForEach-Object { $_ -replace '1.0.0', '${{ env.RELEASE_TAG }}' } | 
-            Set-Content "inno-setup\Setup.iss"
-            
-          if ($platform -eq 'ARM64') {
-            (Get-Content "inno-setup\Setup.iss") | 
-              ForEach-Object { $_ -replace 'x64compatible', 'arm64' } | 
-              Set-Content "inno-setup\Setup.iss"
-                
-            (Get-Content "inno-setup\Setup.iss") | 
-              ForEach-Object { $_ -replace '-x64', '-arm64' } | 
-              Set-Content "inno-setup\Setup.iss"
-
-            if (Test-Path "inno-setup\input\Companion\VDDSysTray.exe") {Remove-Item "inno-setup\input\Companion\VDDSysTray.exe"}
-            copy "inno-setup\input\Companion\arm64\VDDSysTray.exe" "inno-setup\input\Companion\"
-          }
-
-      - name: Compile Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: inno-setup\Setup.iss
-          options: /O+
-
-      - name: Upload Installer as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Installer-${{ matrix.configuration }}-${{ matrix.platform }}
-          path: inno-setup\output\*.exe
 
   celebrate:
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: Celebrate
         run: |
