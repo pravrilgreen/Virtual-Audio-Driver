@@ -40,72 +40,92 @@ jobs:
           choco install windowsdriverkit11 -y
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      # Simple approach to disable verification at command line
-      - name: Build the driver with verification disabled
+      # Create MSBuild properties file to disable INF verification and API validation
+      - name: Create MSBuild properties
         run: |
-          # Set environment variable to disable driver verifier
-          $env:DISABLE_INFVERIFIER = 1
-          $env:SKIP_INF = 1
-          
-          # Build with API validation disabled
-          msbuild "VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:DISABLE_INFVERIFIER=1 /p:SKIP_INF=1 /p:ValidateDriverApiCompatibility=false /p:RunCodeAnalysis=false /p:EnableInf=false
+          $propsContent = @"
+<Project>
+  <PropertyGroup>
+    <!-- Disable INF verification -->
+    <DisableInfVerifier>true</DisableInfVerifier>
+    <SkipInf>true</SkipInf>
+    <!-- Disable API validation -->
+    <ValidateDriverApiCompatibility>false</ValidateDriverApiCompatibility>
+  </PropertyGroup>
+</Project>
+"@
+          Set-Content -Path "DisableVerification.props" -Value $propsContent
+          Write-Host "Created MSBuild properties file to disable verification steps"
 
-      # Extract driver files from source directory based on build log
-      - name: Locate driver files
+      # Build with verification steps disabled
+      - name: Build the driver
         run: |
-          # Search for driver files in source directory structure
-          $sysFile = Get-ChildItem -Path . -Recurse -Filter "VirtualAudioDriver.sys" | Where-Object { $_.FullName -like "*\${{ matrix.platform }}\${{ matrix.configuration }}*" } | Select-Object -First 1
-          $infFile = Get-ChildItem -Path . -Recurse -Filter "VirtualAudioDriver.inf" | Where-Object { $_.FullName -like "*\${{ matrix.platform }}\${{ matrix.configuration }}*" } | Select-Object -First 1
+          msbuild "VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:ForceImportBeforeCppTargets="$PWD\DisableVerification.props"
+
+      # Find the actual driver files
+      - name: Locate driver files
+        id: locate_files
+        run: |
+          # Find .sys file
+          $sysFiles = Get-ChildItem -Path . -Recurse -Filter "VirtualAudioDriver.sys" | Where-Object { $_.FullName -like "*\${{ matrix.platform }}\${{ matrix.configuration }}*" }
           
-          # Based on build log, check the specific path
-          $mainDir = Join-Path (Get-Location) "Source\Main"
-          $specificPath = Join-Path $mainDir "${{ matrix.platform }}\${{ matrix.configuration }}"
-          
-          if (Test-Path $specificPath) {
-            Write-Host "Found specific build path: $specificPath"
-            if (Test-Path (Join-Path $specificPath "VirtualAudioDriver.sys")) {
-              Write-Host "Found driver file in specific path"
-              $outDir = New-Item -ItemType Directory -Path "output" -Force
-              Copy-Item -Path (Join-Path $specificPath "VirtualAudioDriver.sys") -Destination $outDir
-              if (Test-Path (Join-Path $specificPath "VirtualAudioDriver.inf")) {
-                Copy-Item -Path (Join-Path $specificPath "VirtualAudioDriver.inf") -Destination $outDir
+          if ($sysFiles.Count -gt 0) {
+            $sysFile = $sysFiles[0].FullName
+            $sysDir = Split-Path -Parent $sysFile
+            
+            Write-Host "Found driver at: $sysFile"
+            Write-Host "Driver directory: $sysDir"
+            
+            echo "DRIVER_DIR=$sysDir" >> $env:GITHUB_ENV
+          } else {
+            Write-Warning "Could not find VirtualAudioDriver.sys file!"
+            # List directories to help debug
+            Write-Host "Searching directories:"
+            Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq "${{ matrix.platform }}" } | ForEach-Object {
+              Write-Host $_.FullName
+              Get-ChildItem -Path $_.FullName -Directory | ForEach-Object {
+                Write-Host "  $_"
+                if ($_.Name -eq "${{ matrix.configuration }}") {
+                  Write-Host "    Files:"
+                  Get-ChildItem -Path $_.FullName | ForEach-Object {
+                    Write-Host "      $_"
+                  }
+                }
               }
             }
-          } elseif ($sysFile) {
-            Write-Host "Found driver at: $($sysFile.FullName)"
-            $outDir = New-Item -ItemType Directory -Path "output" -Force
-            Copy-Item -Path $sysFile.FullName -Destination $outDir
-            if ($infFile) {
-              Copy-Item -Path $infFile.FullName -Destination $outDir
-            }
+          }
+
+      - name: List build directory
+        run: |
+          if (Test-Path env:DRIVER_DIR) {
+            Write-Host "Contents of driver directory:"
+            dir "${{ env.DRIVER_DIR }}"
           } else {
-            Write-Host "Searching for any driver files..."
+            Write-Host "Searching for any built files:"
             Get-ChildItem -Path . -Recurse -Include "*.sys","*.inf" | ForEach-Object {
               Write-Host $_.FullName
             }
           }
 
-      # List output directory
-      - name: List output files
-        run: |
-          if (Test-Path "output") {
-            Get-ChildItem -Path "output"
-          } else {
-            Write-Host "Output directory not found"
-          }
-
-      # Upload whatever files we found
       - name: Upload built driver
+        id: upload_artifact
+        if: env.DRIVER_DIR != ''
         uses: actions/upload-artifact@v4
         with:
           name: Built-Driver-${{ matrix.configuration }}-${{ matrix.platform }}
           path: |
-            output/*.sys
-            output/*.inf
-            Source/Main/${{ matrix.platform }}/${{ matrix.configuration }}/*.sys
-            Source/Main/${{ matrix.platform }}/${{ matrix.configuration }}/*.inf
-            **/${{ matrix.platform }}/${{ matrix.configuration }}/*.sys
-            **/${{ matrix.platform }}/${{ matrix.configuration }}/*.inf
+            ${{ env.DRIVER_DIR }}\VirtualAudioDriver.sys
+            ${{ env.DRIVER_DIR }}\VirtualAudioDriver.inf
+
+      # Fallback upload if specific files weren't found
+      - name: Fallback upload
+        if: env.DRIVER_DIR == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Built-Files-${{ matrix.configuration }}-${{ matrix.platform }}
+          path: |
+            **\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.sys
+            **\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.inf
 
       - name: Generate release tag
         id: generate_tag
