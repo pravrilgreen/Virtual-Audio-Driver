@@ -62,36 +62,53 @@ jobs:
         run: |
           msbuild "VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:ForceImportBeforeCppTargets="$PWD\DisableVerification.props"
 
-      # Find the actual driver files
+      # Find and locate driver files with improved search pattern
       - name: Locate driver files
         id: locate_files
         run: |
-          # Find .sys file
-          $sysFiles = Get-ChildItem -Path . -Recurse -Filter "VirtualAudioDriver.sys" | Where-Object { $_.FullName -like "*\${{ matrix.platform }}\${{ matrix.configuration }}*" }
+          # Search for VirtualAudioDriver.sys files
+          $outputDir = "Source/Main/${{ matrix.platform }}/${{ matrix.configuration }}"
+          Write-Host "Checking output directory: $outputDir"
           
-          if ($sysFiles.Count -gt 0) {
-            $sysFile = $sysFiles[0].FullName
-            $sysDir = Split-Path -Parent $sysFile
-            
-            Write-Host "Found driver at: $sysFile"
-            Write-Host "Driver directory: $sysDir"
-            
-            echo "DRIVER_DIR=$sysDir" >> $env:GITHUB_ENV
-          } else {
-            Write-Warning "Could not find VirtualAudioDriver.sys file!"
-            # List directories to help debug
-            Write-Host "Searching directories:"
-            Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq "${{ matrix.platform }}" } | ForEach-Object {
-              Write-Host $_.FullName
-              Get-ChildItem -Path $_.FullName -Directory | ForEach-Object {
-                Write-Host "  $_"
-                if ($_.Name -eq "${{ matrix.configuration }}") {
-                  Write-Host "    Files:"
-                  Get-ChildItem -Path $_.FullName | ForEach-Object {
-                    Write-Host "      $_"
-                  }
-                }
+          # Check if the expected output directory exists
+          if (Test-Path $outputDir) {
+            $driverFiles = Get-ChildItem -Path $outputDir -Recurse -File -Include "VirtualAudioDriver.sys"
+            if ($driverFiles.Count -gt 0) {
+              $driverFile = $driverFiles[0].FullName
+              $driverDir = Split-Path -Parent $driverFile
+              
+              Write-Host "Found driver at: $driverFile"
+              Write-Host "Driver directory: $driverDir"
+              
+              echo "DRIVER_DIR=$driverDir" >> $env:GITHUB_ENV
+              
+              # Also look for the INF file in the same directory
+              $infFiles = Get-ChildItem -Path $driverDir -Filter "*.inf"
+              if ($infFiles.Count -gt 0) {
+                Write-Host "Found INF file: $($infFiles[0].FullName)"
+              } else {
+                Write-Warning "No INF file found in driver directory!"
               }
+            } else {
+              Write-Warning "Could not find VirtualAudioDriver.sys file in expected directory!"
+            }
+          } else {
+            Write-Warning "Expected output directory not found: $outputDir"
+            
+            # Fall back to a broader search
+            $sysFiles = Get-ChildItem -Path . -Recurse -Filter "VirtualAudioDriver.sys" | 
+                        Where-Object { $_.FullName -like "*\${{ matrix.platform }}\${{ matrix.configuration }}*" }
+            
+            if ($sysFiles.Count -gt 0) {
+              $driverFile = $sysFiles[0].FullName
+              $driverDir = Split-Path -Parent $driverFile
+              
+              Write-Host "Found driver at: $driverFile"
+              Write-Host "Driver directory: $driverDir"
+              
+              echo "DRIVER_DIR=$driverDir" >> $env:GITHUB_ENV
+            } else {
+              Write-Warning "Could not find VirtualAudioDriver.sys using fallback search!"
             }
           }
 
@@ -115,7 +132,7 @@ jobs:
           name: Built-Driver-${{ matrix.configuration }}-${{ matrix.platform }}
           path: |
             ${{ env.DRIVER_DIR }}\VirtualAudioDriver.sys
-            ${{ env.DRIVER_DIR }}\VirtualAudioDriver.inf
+            ${{ env.DRIVER_DIR }}\*.inf
 
       # Fallback upload if specific files weren't found
       - name: Fallback upload
@@ -124,8 +141,8 @@ jobs:
         with:
           name: Built-Files-${{ matrix.configuration }}-${{ matrix.platform }}
           path: |
-            **\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.sys
-            **\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.inf
+            *\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.sys
+            *\${{ matrix.platform }}\${{ matrix.configuration }}\**\*.inf
 
       - name: Generate release tag
         id: generate_tag
