@@ -58,17 +58,14 @@ By installing these drivers, you can process or forward audio without physical h
    ```
    *Note: A production-signed driver can skip this step.*
 
-2. **Install the INF**  
-   - Right-click on the `.inf` file and choose “Install.”  
-   - OR open an elevated command prompt and run:
-     ```powershell
-     pnputil /add-driver .\VirtualAudioDriver.inf /install
-     ```
+2. **Open Device Manager**
+   - Choose **Audio inputs and outputs**, then in the top **Action** menu, choose **Add Legacy Hardware**.
+   - Choose **Install the hardware that I manually select from a list (Advanced)**
+   - Choose **Sound, video and game controllers**
+   - Choose "Have Disk..." and locate the **VirtualAudioDriver.inf**
+   - Continue with the installation.
 
-3. **Reboot** (if prompted)  
-   Windows may require a reboot to finalize driver initialization.
-
-4. **Verify Installation**  
+3. **Verify Installation**  
    - Open **Device Manager**.  
    - Check under **Sound, video and game controllers** for “Virtual Audio Driver” (speaker).  
    - Check under **Audio inputs and outputs** for “Virtual Mic Driver” (microphone).
