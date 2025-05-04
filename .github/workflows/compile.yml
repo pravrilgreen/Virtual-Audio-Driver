@@ -105,10 +105,10 @@ jobs:
       
       - name: Build the driver
         run: |
-          msbuild "Virtual-Audio-Driver/VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }}
+          msbuild "VirtualAudioDriver.sln" /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }}
       
       - name: List build directory
-        run: dir "Virtual-Audio-Driver\${{ matrix.platform }}\${{ matrix.configuration }}\package"
+        run: dir "${{ matrix.platform }}\${{ matrix.configuration }}\package"
       
       - name: Upload built driver
         id: upload_artifact
@@ -116,9 +116,9 @@ jobs:
         with:
           name: Built-Driver-${{ matrix.configuration }}-${{ matrix.platform }}
           path: |
-            Virtual-Audio-Driver\${{ matrix.platform }}\${{ matrix.configuration }}\package\VirtualAudioDriver.sys
-            Virtual-Audio-Driver\${{ matrix.platform }}\${{ matrix.configuration }}\package\VirtualAudioDriver.inf
-            Virtual-Audio-Driver\${{ matrix.platform }}\${{ matrix.configuration }}\package\virtualaudiodriver.cat
+            ${{ matrix.platform }}\${{ matrix.configuration }}\package\VirtualAudioDriver.sys
+            ${{ matrix.platform }}\${{ matrix.configuration }}\package\VirtualAudioDriver.inf
+            ${{ matrix.platform }}\${{ matrix.configuration }}\package\virtualaudiodriver.cat
       
       - name: Generate release tag
         id: generate_tag
@@ -131,4 +131,4 @@ jobs:
           echo "Generated Release Tag: ${{ env.RELEASE_TAG }}"
             
       - name: Verify Built Artifacts
-        run: dir 'Virtual-Audio-Driver\${{ matrix.platform }}\${{ matrix.configuration }}\package'
+        run: dir '${{ matrix.platform }}\${{ matrix.configuration }}\package'
