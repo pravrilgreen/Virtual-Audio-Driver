@@ -193,8 +193,8 @@ jobs:
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
-          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
-          signing-policy-slug: 'VAD'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'  # Changed back to the variable
+          signing-policy-slug: 'release-signing'  # Changed from 'VAD' to 'release-signing'
           github-artifact-id: '${{ steps.upload_artifact.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: '${{ vars.SIGNPATH_OUTPUT_DIR }}'
