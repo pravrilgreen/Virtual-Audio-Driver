@@ -1,5 +1,9 @@
 > [!WARNING]
 > This software is in beta and requires test signing to be enabled.
+
+> [!NOTE]
+> Software Developers/Organizations: Looking to implement Virtual speakers/mics into your app? Need advanced functionality like named pipes, shared memory buffers for no-latency audio, specific and direct integration with your existing apps, and more? Contact us for quotes on a custom build!** contact@mikethetech.com**
+
 # Virtual Audio Driver by MikeTheTech
 
 Welcome to the **Virtual Audio Driver by MikeTheTech**! This project provides two key drivers based on the Windows Driver Kit (WDK):
