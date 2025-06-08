@@ -22,6 +22,7 @@ Abstract:
 #include <wdfminiport.h>
 #include <Ntstrsafe.h>
 #include "NewDelete.h"
+#include "CCircularBuffer.h"
 
 //=============================================================================
 // Defines
@@ -158,7 +159,7 @@ typedef struct _PortClassDeviceContext              // 32       64      Byte off
 //
 #define MajorTarget_to_Obj(ptr) \
     reinterpret_cast<CMiniportWaveRT*>(ptr)
-    
+
 #define MinorTarget_to_Obj(ptr) \
     static_cast<CMiniportWaveRTStream*>(reinterpret_cast<PMINIPORTWAVERTSTREAM>(ptr))
 
@@ -168,15 +169,14 @@ typedef struct _PortClassDeviceContext              // 32       64      Byte off
 extern DWORD g_DoNotCreateDataFiles;
 extern DWORD g_DisableBthScoBypass;
 extern UNICODE_STRING g_RegistryPath;
-
 //=============================================================================
 // Function prototypes
 //=============================================================================
 
 // Generic topology handler
 NTSTATUS PropertyHandler_Topology
-( 
-    _In_  PPCPROPERTY_REQUEST PropertyRequest 
+(
+    _In_  PPCPROPERTY_REQUEST PropertyRequest
 );
 
 // Default WaveFilter automation table.
@@ -187,8 +187,8 @@ NTSTATUS PropertyHandler_WaveFilter
 );
 
 NTSTATUS PropertyHandler_GenericPin
-( 
-    _In_ PPCPROPERTY_REQUEST      PropertyRequest 
+(
+    _In_ PPCPROPERTY_REQUEST      PropertyRequest
 );
 
 // common.h uses some of the above definitions.

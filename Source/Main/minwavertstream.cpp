@@ -1,4 +1,4 @@
-#include "definitions.h"
+﻿#include "definitions.h"
 #include <limits.h>
 #include <ks.h>
 #include "endpoints.h"
@@ -1389,37 +1389,59 @@ VOID CMiniportWaveRTStream::UpdatePosition
 
 //=============================================================================
 #pragma code_seg()
-VOID CMiniportWaveRTStream::WriteBytes
-(
-    _In_ ULONG ByteDisplacement
-)
-/*++
+extern CCircularBuffer* g_GlobalAudioBuffer;
 
-Routine Description:
-
-This function writes the audio buffer using silence instead of a tone generator
-
-Arguments:
-
-ByteDisplacement - # of bytes to process.
-
---*/
+VOID CMiniportWaveRTStream::WriteBytes(_In_ ULONG ByteDisplacement)
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    // Normally this will loop no more than once for a single wrap, but if
-    // many bytes have been displaced then this may loops many times.
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+        "[HackAI] WriteBytes called - LinearPosition: %llu, ByteDisplacement: %lu\n",
+        m_ullLinearPosition, ByteDisplacement);
+
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-        
-        // Instead of generating a tone, just output silence
-        RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
-           	
+        ULONG bytesRead = 0;
+
+        if (g_GlobalAudioBuffer)
+        {
+            NTSTATUS status = g_GlobalAudioBuffer->Read(
+                m_pDmaBuffer + bufferOffset,
+                runWrite,
+                &bytesRead
+            );
+
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                "[HackAI] Read from GlobalAudioBuffer - Requested: %lu, Read: %lu, Status: 0x%08X\n",
+                runWrite, bytesRead, status);
+
+            if (!NT_SUCCESS(status) || bytesRead == 0)
+            {
+                RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                    "[HackAI] No data or read failed - Filling silence\n");
+            }
+            else if (bytesRead < runWrite)
+            {
+                RtlZeroMemory(m_pDmaBuffer + bufferOffset + bytesRead, runWrite - bytesRead);
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                    "[HackAI] Partial read - Filled remaining %lu bytes with silence\n",
+                    runWrite - bytesRead);
+            }
+        }
+        else
+        {
+            RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                "[HackAI] GlobalAudioBuffer NULL - Silence written\n");
+        }
+
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }
 }
+
 
 //=============================================================================
 #pragma code_seg()
@@ -1445,6 +1467,7 @@ ByteDisplacement - # of bytes to process.
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
+        DbgPrint("HackAI: CMiniportWaveRTStream::ReadBytes is running....\n");
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
         m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;

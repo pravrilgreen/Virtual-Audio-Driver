@@ -313,6 +313,7 @@
   <ItemGroup>
     <ClCompile Include="adapter.cpp" />
     <ClCompile Include="basetopo.cpp" />
+    <ClCompile Include="CCircularBuffer.cpp" />
     <ClCompile Include="common.cpp" />
     <ClCompile Include="mintopo.cpp" />
     <ClCompile Include="minwavert.cpp" />

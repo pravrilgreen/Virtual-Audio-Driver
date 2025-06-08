@@ -27,6 +27,10 @@ typedef void (*fnPcDriverUnload) (PDRIVER_OBJECT);
 fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
 extern "C" DRIVER_UNLOAD DriverUnload;
 
+CCircularBuffer* g_GlobalAudioBuffer = nullptr;
+
+#define IOCTL_WRITE_AUDIO CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_WRITE_DATA)
+
 //-----------------------------------------------------------------------------
 // Referenced forward.
 //-----------------------------------------------------------------------------
@@ -35,11 +39,11 @@ DRIVER_ADD_DEVICE AddDevice;
 
 NTSTATUS
 StartDevice
-( 
-    _In_  PDEVICE_OBJECT,      
-    _In_  PIRP,                
-    _In_  PRESOURCELIST        
-); 
+(
+    _In_  PDEVICE_OBJECT,
+    _In_  PIRP,
+    _In_  PRESOURCELIST
+);
 
 _Dispatch_type_(IRP_MJ_PNP)
 DRIVER_DISPATCH PnpHandler;
@@ -51,10 +55,97 @@ DRIVER_DISPATCH PnpHandler;
 DWORD g_DoNotCreateDataFiles = 1;  // default is off.
 DWORD g_DisableToneGenerator = 1;  // default is to not generate tones.
 UNICODE_STRING g_RegistryPath;      // This is used to store the registry settings path for the driver
+PDEVICE_OBJECT g_ControlDeviceObject = nullptr;
 
 //-----------------------------------------------------------------------------
 // Functions
 //-----------------------------------------------------------------------------
+
+NTSTATUS
+HandleCustomIOCTL(
+    _In_ PDEVICE_OBJECT DeviceObject,
+    _In_ PIRP Irp
+)
+{
+    PIO_STACK_LOCATION irpStack = IoGetCurrentIrpStackLocation(Irp);
+    NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+    ULONG_PTR bytesTransferred = 0;
+
+    if (DeviceObject != g_ControlDeviceObject)
+    {
+        return PcDispatchIrp(DeviceObject, Irp);
+    }
+
+    DbgPrint("HackAI: HandleCustomIOCTL called - MajorFunction: 0x%X\n", irpStack->MajorFunction);
+
+    switch (irpStack->MajorFunction)
+    {
+    case IRP_MJ_CREATE:
+        DbgPrint("HackAI: IRP_MJ_CREATE received\n");
+        Irp->IoStatus.Status = STATUS_SUCCESS;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_SUCCESS;
+
+    case IRP_MJ_CLOSE:
+        DbgPrint("HackAI: IRP_MJ_CLOSE received\n");
+        Irp->IoStatus.Status = STATUS_SUCCESS;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_SUCCESS;
+
+    case IRP_MJ_DEVICE_CONTROL:
+    {
+        ULONG controlCode = irpStack->Parameters.DeviceIoControl.IoControlCode;
+        DbgPrint("HackAI: IRP_MJ_DEVICE_CONTROL received - IoControlCode: 0x%X\n", controlCode);
+
+        if (controlCode == IOCTL_WRITE_AUDIO)
+        {
+            PVOID buffer = Irp->AssociatedIrp.SystemBuffer;
+            ULONG length = irpStack->Parameters.DeviceIoControl.InputBufferLength;
+
+            DbgPrint("HackAI: IOCTL_WRITE_AUDIO called - Buffer: %p, Length: %lu\n", buffer, length);
+
+            if (buffer && length != 0)
+            {
+                if (g_GlobalAudioBuffer)
+                {
+                    status = g_GlobalAudioBuffer->Write((PUCHAR)buffer, length);
+                    DbgPrint("HackAI: GlobalAudioBuffer->Write returned 0x%08X\n", status);
+
+                    if (NT_SUCCESS(status))
+                    {
+                        bytesTransferred = length;
+                    }
+                }
+                else
+                {
+                    DbgPrint("HackAI: GlobalAudioBuffer not ready\n");
+                    status = STATUS_DEVICE_NOT_READY;
+                }
+            }
+        }
+        else
+        {
+            DbgPrint("HackAI: Unsupported IOCTL code: 0x%X\n", controlCode);
+            status = STATUS_INVALID_DEVICE_REQUEST;
+        }
+
+        Irp->IoStatus.Status = status;
+        Irp->IoStatus.Information = bytesTransferred;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return status;
+    }
+
+    default:
+        DbgPrint("HackAI: Unsupported MajorFunction: 0x%X\n", irpStack->MajorFunction);
+        Irp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_INVALID_DEVICE_REQUEST;
+    }
+}
+
 
 #pragma code_seg("PAGE")
 void ReleaseRegistryStringBuffer()
@@ -73,7 +164,7 @@ void ReleaseRegistryStringBuffer()
 //=============================================================================
 #pragma code_seg("PAGE")
 extern "C"
-void DriverUnload 
+void DriverUnload
 (
     _In_ PDRIVER_OBJECT DriverObject
 )
@@ -93,9 +184,28 @@ Environment:
 
 --*/
 {
-    PAGED_CODE(); 
+    PAGED_CODE();
 
     DPF(D_TERSE, ("[DriverUnload]"));
+
+    DbgPrint(">>>>> [HackAI] DriverUnload called <<<<<");
+    UNICODE_STRING symLinkName = RTL_CONSTANT_STRING(L"\\DosDevices\\HackAI_AudioCtrl");
+
+    IoDeleteSymbolicLink(&symLinkName);
+
+    if (g_GlobalAudioBuffer)
+    {
+        DbgPrint(">>>>> [HackAI] Deleting global audio buffer: %p", g_GlobalAudioBuffer);
+
+        delete g_GlobalAudioBuffer;
+        g_GlobalAudioBuffer = nullptr;
+    }
+
+    if (g_ControlDeviceObject)
+    {
+        IoDeleteDevice(g_ControlDeviceObject);
+        g_ControlDeviceObject = nullptr;
+    }
 
     ReleaseRegistryStringBuffer();
 
@@ -103,7 +213,7 @@ Environment:
     {
         goto Done;
     }
-    
+
     //
     // Invoke first the port unload.
     //
@@ -172,7 +282,7 @@ __drv_requiresIRQL(PASSIVE_LEVEL)
 NTSTATUS
 GetRegistrySettings(
     _In_ PUNICODE_STRING RegistryPath
-   )
+)
 /*++
 
 Routine Description:
@@ -197,10 +307,10 @@ Returns:
     PDRIVER_OBJECT              DriverObject;
     HANDLE                      DriverKey;
     RTL_QUERY_REGISTRY_TABLE    paramTable[] = {
-    // QueryRoutine     Flags                                               Name                     EntryContext             DefaultType                                                    DefaultData              DefaultLength
-        { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"DoNotCreateDataFiles", &g_DoNotCreateDataFiles, (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD, &g_DoNotCreateDataFiles, sizeof(ULONG)},
-        { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"DisableToneGenerator", &g_DisableToneGenerator, (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD, &g_DisableToneGenerator, sizeof(ULONG)},
-        { NULL,   0,                                                        NULL,                    NULL,                    0,                                                             NULL,                    0}
+        // QueryRoutine     Flags                                               Name                     EntryContext             DefaultType                                                    DefaultData              DefaultLength
+            { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"DoNotCreateDataFiles", &g_DoNotCreateDataFiles, (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD, &g_DoNotCreateDataFiles, sizeof(ULONG)},
+            { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"DisableToneGenerator", &g_DisableToneGenerator, (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD, &g_DisableToneGenerator, sizeof(ULONG)},
+            { NULL,   0,                                                        NULL,                    NULL,                    0,                                                             NULL,                    0}
     };
 
     DPF(D_TERSE, ("[GetRegistrySettings]"));
@@ -210,11 +320,11 @@ Returns:
 
     DriverObject = WdfDriverWdmGetDriverObject(WdfGetDriver());
     DriverKey = NULL;
-    ntStatus = IoOpenDriverRegistryKey(DriverObject, 
-                                 DriverRegKeyParameters,
-                                 KEY_READ,
-                                 0,
-                                 &DriverKey);
+    ntStatus = IoOpenDriverRegistryKey(DriverObject,
+        DriverRegKeyParameters,
+        KEY_READ,
+        0,
+        &DriverKey);
 
     if (!NT_SUCCESS(ntStatus))
     {
@@ -222,12 +332,12 @@ Returns:
     }
 
     ntStatus = RtlQueryRegistryValues(RTL_REGISTRY_HANDLE,
-                                  (PCWSTR) DriverKey,
-                                  &paramTable[0],
-                                  NULL,
-                                  NULL);
+        (PCWSTR)DriverKey,
+        &paramTable[0],
+        NULL,
+        NULL);
 
-    if (!NT_SUCCESS(ntStatus)) 
+    if (!NT_SUCCESS(ntStatus))
     {
         DPF(D_VERBOSE, ("RtlQueryRegistryValues failed, using default values, 0x%x", ntStatus));
         //
@@ -253,33 +363,33 @@ Returns:
 extern "C" DRIVER_INITIALIZE DriverEntry;
 extern "C" NTSTATUS
 DriverEntry
-( 
+(
     _In_  PDRIVER_OBJECT          DriverObject,
     _In_  PUNICODE_STRING         RegistryPathName
 )
 {
-/*++
+    /*++
 
-Routine Description:
+    Routine Description:
 
-  Installable driver initialization entry point.
-  This entry point is called directly by the I/O system.
+      Installable driver initialization entry point.
+      This entry point is called directly by the I/O system.
 
-  All audio adapter drivers can use this code without change.
+      All audio adapter drivers can use this code without change.
 
-Arguments:
+    Arguments:
 
-  DriverObject - pointer to the driver object
+      DriverObject - pointer to the driver object
 
-  RegistryPath - pointer to a unicode string representing the path,
-                   to driver-specific key in the registry.
+      RegistryPath - pointer to a unicode string representing the path,
+                       to driver-specific key in the registry.
 
-Return Value:
+    Return Value:
 
-  STATUS_SUCCESS if successful,
-  STATUS_UNSUCCESSFUL otherwise.
+      STATUS_SUCCESS if successful,
+      STATUS_UNSUCCESSFUL otherwise.
 
---*/
+    --*/
     NTSTATUS                    ntStatus;
     WDF_DRIVER_CONFIG           config;
 
@@ -293,7 +403,7 @@ Return Value:
         ntStatus,
         DPF(D_ERROR, ("Registry path copy error 0x%x", ntStatus)),
         Done);
-    
+
     WDF_DRIVER_CONFIG_INIT(&config, WDF_NO_EVENT_CALLBACK);
     //
     // Set WdfDriverInitNoDispatchOverride flag to tell the framework
@@ -303,13 +413,13 @@ Return Value:
     // port driver.
     //
     config.DriverInitFlags |= WdfDriverInitNoDispatchOverride;
-    config.DriverPoolTag    = MINADAPTER_POOLTAG;
+    config.DriverPoolTag = MINADAPTER_POOLTAG;
 
     ntStatus = WdfDriverCreate(DriverObject,
-                               RegistryPathName,
-                               WDF_NO_OBJECT_ATTRIBUTES,
-                               &config,
-                               WDF_NO_HANDLE);
+        RegistryPathName,
+        WDF_NO_OBJECT_ATTRIBUTES,
+        &config,
+        WDF_NO_HANDLE);
     IF_FAILED_ACTION_JUMP(
         ntStatus,
         DPF(D_ERROR, ("WdfDriverCreate failed, 0x%x", ntStatus)),
@@ -327,9 +437,9 @@ Return Value:
     //
     // Tell the class driver to initialize the driver.
     //
-    ntStatus =  PcInitializeAdapterDriver(DriverObject,
-                                          RegistryPathName,
-                                          (PDRIVER_ADD_DEVICE)AddDevice);
+    ntStatus = PcInitializeAdapterDriver(DriverObject,
+        RegistryPathName,
+        (PDRIVER_ADD_DEVICE)AddDevice);
     IF_FAILED_ACTION_JUMP(
         ntStatus,
         DPF(D_ERROR, ("PcInitializeAdapterDriver failed, 0x%x", ntStatus)),
@@ -350,7 +460,7 @@ Return Value:
     // All done.
     //
     ntStatus = STATUS_SUCCESS;
-    
+
 Done:
 
     if (!NT_SUCCESS(ntStatus))
@@ -362,9 +472,96 @@ Done:
 
         ReleaseRegistryStringBuffer();
     }
-    
+
+    // ----------------- Control Device Init -----------------
+    UNICODE_STRING deviceName = RTL_CONSTANT_STRING(L"\\Device\\HackAI_AudioCtrl");
+    UNICODE_STRING symLinkName = RTL_CONSTANT_STRING(L"\\DosDevices\\HackAI_AudioCtrl");
+    PDEVICE_OBJECT controlDeviceObject = nullptr;
+
+    ntStatus = IoCreateDevice(
+        DriverObject,
+        0,
+        &deviceName,
+        FILE_DEVICE_UNKNOWN,
+        FILE_DEVICE_SECURE_OPEN,
+        FALSE,
+        &controlDeviceObject
+    );
+
+    if (!NT_SUCCESS(ntStatus)) {
+        return ntStatus;
+    }
+
+    DbgPrint("HackAI: IoCreateDevice create successfully.\n");
+    DbgPrint("HackAI: Created control device: %wZ (%p)\n", &deviceName, controlDeviceObject);
+    g_ControlDeviceObject = controlDeviceObject;
+
+    controlDeviceObject->Flags |= DO_BUFFERED_IO;
+
+    IoDeleteSymbolicLink(&symLinkName);
+    ntStatus = IoCreateSymbolicLink(&symLinkName, &deviceName);
+    if (!NT_SUCCESS(ntStatus))
+    {
+        DbgPrint("HackAI: Failed to create symbolic link: 0x%X\n", ntStatus);
+        IoDeleteDevice(g_ControlDeviceObject);
+        g_ControlDeviceObject = nullptr;
+        return ntStatus;
+    }
+
+
+    if (!NT_SUCCESS(ntStatus))
+    {
+        IoDeleteDevice(g_ControlDeviceObject);
+        g_ControlDeviceObject = nullptr;      
+        return ntStatus;
+    }
+
+    controlDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    g_GlobalAudioBuffer = new (POOL_FLAG_NON_PAGED, 'ABUF') CCircularBuffer();
+    if (!g_GlobalAudioBuffer) {
+        DbgPrint("HackAI: Failed to allocate GlobalAudioBuffer\n");
+        ntStatus = STATUS_INSUFFICIENT_RESOURCES;
+    }
+    else {
+        ntStatus = g_GlobalAudioBuffer->Initialize(256 * 1024);
+        if (!NT_SUCCESS(ntStatus)) {
+            DbgPrint("HackAI: Failed to initialize GlobalAudioBuffer: 0x%08X\n", ntStatus);
+            delete g_GlobalAudioBuffer;
+            g_GlobalAudioBuffer = nullptr;
+        }
+    }
+
+    if (!NT_SUCCESS(ntStatus))
+    {
+        if (g_GlobalAudioBuffer)
+        {
+            delete g_GlobalAudioBuffer;
+            g_GlobalAudioBuffer = nullptr;
+        }
+
+        if (g_ControlDeviceObject)
+        {
+            IoDeleteDevice(g_ControlDeviceObject);
+            g_ControlDeviceObject = nullptr;
+        }
+
+        if (WdfGetDriver() != NULL)
+        {
+            WdfDriverMiniportUnload(WdfGetDriver());
+        }
+
+        ReleaseRegistryStringBuffer();
+        return ntStatus;
+    }
+
+    DbgPrint("HackAI: Setting up MajorFunction dispatch table...\n");
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = HandleCustomIOCTL;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = HandleCustomIOCTL;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = HandleCustomIOCTL;
+    DbgPrint("HackAI: MajorFunction dispatch table set successfully.\n");
     return ntStatus;
-} // DriverEntry
+}
 
 #pragma code_seg()
 // disable prefast warning 28152 because 
@@ -373,9 +570,9 @@ Done:
 #pragma code_seg("PAGE")
 //=============================================================================
 NTSTATUS AddDevice
-( 
+(
     _In_  PDRIVER_OBJECT    DriverObject,
-    _In_  PDEVICE_OBJECT    PhysicalDeviceObject 
+    _In_  PDEVICE_OBJECT    PhysicalDeviceObject
 )
 /*++
 
@@ -415,9 +612,9 @@ Return Value:
 
     // Tell the class driver to add the device.
     //
-    ntStatus = 
+    ntStatus =
         PcAddAdapterDevice
-        ( 
+        (
             DriverObject,
             PhysicalDeviceObject,
             PCPFNSTARTDEVICE(StartDevice),
@@ -449,31 +646,31 @@ PowerControlCallback
     UNREFERENCED_PARAMETER(OutBufferSize);
     UNREFERENCED_PARAMETER(BytesReturned);
     UNREFERENCED_PARAMETER(Context);
-    
+
     return STATUS_NOT_IMPLEMENTED;
 }
 
 #pragma code_seg("PAGE")
-NTSTATUS 
+NTSTATUS
 InstallEndpointRenderFilters(
-    _In_ PDEVICE_OBJECT     _pDeviceObject, 
-    _In_ PIRP               _pIrp, 
+    _In_ PDEVICE_OBJECT     _pDeviceObject,
+    _In_ PIRP               _pIrp,
     _In_ PADAPTERCOMMON     _pAdapterCommon,
     _In_ PENDPOINT_MINIPAIR _pAeMiniports
-    )
+)
 {
-    NTSTATUS                    ntStatus                = STATUS_SUCCESS;
-    PUNKNOWN                    unknownTopology         = NULL;
-    PUNKNOWN                    unknownWave             = NULL;
-    PPORTCLSETWHELPER           pPortClsEtwHelper       = NULL;
+    NTSTATUS                    ntStatus = STATUS_SUCCESS;
+    PUNKNOWN                    unknownTopology = NULL;
+    PUNKNOWN                    unknownWave = NULL;
+    PPORTCLSETWHELPER           pPortClsEtwHelper = NULL;
 #ifdef _USE_IPortClsRuntimePower
-    PPORTCLSRUNTIMEPOWER        pPortClsRuntimePower    = NULL;
+    PPORTCLSRUNTIMEPOWER        pPortClsRuntimePower = NULL;
 #endif // _USE_IPortClsRuntimePower
-    PPORTCLSStreamResourceManager pPortClsResMgr        = NULL;
-    PPORTCLSStreamResourceManager2 pPortClsResMgr2      = NULL;
+    PPORTCLSStreamResourceManager pPortClsResMgr = NULL;
+    PPORTCLSStreamResourceManager2 pPortClsResMgr2 = NULL;
 
     PAGED_CODE();
-    
+
     UNREFERENCED_PARAMETER(_pDeviceObject);
 
     ntStatus = _pAdapterCommon->InstallEndpointFilters(
@@ -486,7 +683,7 @@ InstallEndpointRenderFilters(
 
     if (unknownWave) // IID_IPortClsEtwHelper and IID_IPortClsRuntimePower interfaces are only exposed on the WaveRT port.
     {
-        ntStatus = unknownWave->QueryInterface (IID_IPortClsEtwHelper, (PVOID *)&pPortClsEtwHelper);
+        ntStatus = unknownWave->QueryInterface(IID_IPortClsEtwHelper, (PVOID*)&pPortClsEtwHelper);
         if (NT_SUCCESS(ntStatus))
         {
             _pAdapterCommon->SetEtwHelper(pPortClsEtwHelper);
@@ -496,7 +693,7 @@ InstallEndpointRenderFilters(
 
 #ifdef _USE_IPortClsRuntimePower
         // Let's get the runtime power interface on PortCls.  
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsRuntimePower, (PVOID *)&pPortClsRuntimePower);
+        ntStatus = unknownWave->QueryInterface(IID_IPortClsRuntimePower, (PVOID*)&pPortClsRuntimePower);
         if (NT_SUCCESS(ntStatus))
         {
             // This interface would typically be stashed away for later use.  Instead,
@@ -536,7 +733,7 @@ InstallEndpointRenderFilters(
         // (i.e., do NOT add the current thread as streaming resource).
         //
         // testing IPortClsStreamResourceManager:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager, (PVOID *)&pPortClsResMgr);
+        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager, (PVOID*)&pPortClsResMgr);
         if (NT_SUCCESS(ntStatus))
         {
             PCSTREAMRESOURCE_DESCRIPTOR res;
@@ -548,7 +745,7 @@ InstallEndpointRenderFilters(
             res.Pdo = pdo;
             res.Type = ePcStreamResourceThread;
             res.Resource.Thread = PsGetCurrentThread();
-            
+
             NTSTATUS ntStatusTest = pPortClsResMgr->AddStreamResource(NULL, &res, &hRes);
             if (NT_SUCCESS(ntStatusTest))
             {
@@ -559,9 +756,9 @@ InstallEndpointRenderFilters(
             pPortClsResMgr->Release();
             pPortClsResMgr = NULL;
         }
-        
+
         // testing IPortClsStreamResourceManager2:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager2, (PVOID *)&pPortClsResMgr2);
+        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager2, (PVOID*)&pPortClsResMgr2);
         if (NT_SUCCESS(ntStatus))
         {
             PCSTREAMRESOURCE_DESCRIPTOR res;
@@ -573,7 +770,7 @@ InstallEndpointRenderFilters(
             res.Pdo = pdo;
             res.Type = ePcStreamResourceThread;
             res.Resource.Thread = PsGetCurrentThread();
-            
+
             NTSTATUS ntStatusTest = pPortClsResMgr2->AddStreamResource2(pdo, NULL, &res, &hRes);
             if (NT_SUCCESS(ntStatusTest))
             {
@@ -593,24 +790,24 @@ InstallEndpointRenderFilters(
 }
 
 #pragma code_seg("PAGE")
-NTSTATUS 
+NTSTATUS
 InstallAllRenderFilters(
-    _In_ PDEVICE_OBJECT _pDeviceObject, 
-    _In_ PIRP           _pIrp, 
+    _In_ PDEVICE_OBJECT _pDeviceObject,
+    _In_ PIRP           _pIrp,
     _In_ PADAPTERCOMMON _pAdapterCommon
-    )
+)
 {
     NTSTATUS            ntStatus;
-    PENDPOINT_MINIPAIR* ppAeMiniports   = g_RenderEndpoints;
-    
+    PENDPOINT_MINIPAIR* ppAeMiniports = g_RenderEndpoints;
+
     PAGED_CODE();
 
-    for(ULONG i = 0; i < g_cRenderEndpoints; ++i, ++ppAeMiniports)
+    for (ULONG i = 0; i < g_cRenderEndpoints; ++i, ++ppAeMiniports)
     {
         ntStatus = InstallEndpointRenderFilters(_pDeviceObject, _pIrp, _pAdapterCommon, *ppAeMiniports);
         IF_FAILED_JUMP(ntStatus, Exit);
     }
-    
+
     ntStatus = STATUS_SUCCESS;
 
 Exit:
@@ -672,35 +869,35 @@ Exit:
 #pragma code_seg("PAGE")
 NTSTATUS
 StartDevice
-( 
-    _In_  PDEVICE_OBJECT          DeviceObject,     
-    _In_  PIRP                    Irp,              
-    _In_  PRESOURCELIST           ResourceList      
-)  
+(
+    _In_  PDEVICE_OBJECT          DeviceObject,
+    _In_  PIRP                    Irp,
+    _In_  PRESOURCELIST           ResourceList
+)
 {
-/*++
+    /*++
 
-Routine Description:
+    Routine Description:
 
-  This function is called by the operating system when the device is 
-  started.
-  It is responsible for starting the miniports.  This code is specific to    
-  the adapter because it calls out miniports for functions that are specific 
-  to the adapter.                                                            
+      This function is called by the operating system when the device is
+      started.
+      It is responsible for starting the miniports.  This code is specific to
+      the adapter because it calls out miniports for functions that are specific
+      to the adapter.
 
-Arguments:
+    Arguments:
 
-  DeviceObject - pointer to the driver object
+      DeviceObject - pointer to the driver object
 
-  Irp - pointer to the irp 
+      Irp - pointer to the irp
 
-  ResourceList - pointer to the resource list assigned by PnP manager
+      ResourceList - pointer to the resource list assigned by PnP manager
 
-Return Value:
+    Return Value:
 
-  NT status code.
+      NT status code.
 
---*/
+    --*/
     UNREFERENCED_PARAMETER(ResourceList);
 
     PAGED_CODE();
@@ -709,26 +906,26 @@ Return Value:
     ASSERT(Irp);
     ASSERT(ResourceList);
 
-    NTSTATUS                    ntStatus        = STATUS_SUCCESS;
+    NTSTATUS                    ntStatus = STATUS_SUCCESS;
 
-    PADAPTERCOMMON              pAdapterCommon  = NULL;
-    PUNKNOWN                    pUnknownCommon  = NULL;
-    PortClassDeviceContext*     pExtension      = static_cast<PortClassDeviceContext*>(DeviceObject->DeviceExtension);
+    PADAPTERCOMMON              pAdapterCommon = NULL;
+    PUNKNOWN                    pUnknownCommon = NULL;
+    PortClassDeviceContext* pExtension = static_cast<PortClassDeviceContext*>(DeviceObject->DeviceExtension);
 
     DPF_ENTER(("[StartDevice]"));
 
     //
     // create a new adapter common object
     //
-    ntStatus = NewAdapterCommon( 
-                                &pUnknownCommon,
-                                IID_IAdapterCommon,
-                                NULL,
-                                POOL_FLAG_NON_PAGED 
-                                );
+    ntStatus = NewAdapterCommon(
+        &pUnknownCommon,
+        IID_IAdapterCommon,
+        NULL,
+        POOL_FLAG_NON_PAGED
+    );
     IF_FAILED_JUMP(ntStatus, Exit);
 
-    ntStatus = pUnknownCommon->QueryInterface( IID_IAdapterCommon,(PVOID *) &pAdapterCommon);
+    ntStatus = pUnknownCommon->QueryInterface(IID_IAdapterCommon, (PVOID*)&pAdapterCommon);
     IF_FAILED_JUMP(ntStatus, Exit);
 
     ntStatus = pAdapterCommon->Init(DeviceObject);
@@ -736,7 +933,7 @@ Return Value:
 
     //
     // register with PortCls for power-management services
-    ntStatus = PcRegisterAdapterPowerManagement( PUNKNOWN(pAdapterCommon), DeviceObject);
+    ntStatus = PcRegisterAdapterPowerManagement(PUNKNOWN(pAdapterCommon), DeviceObject);
     IF_FAILED_JUMP(ntStatus, Exit);
 
     //
@@ -767,23 +964,23 @@ Exit:
     // Release the adapter IUnknown interface.
     //
     SAFE_RELEASE(pUnknownCommon);
-    
+
     return ntStatus;
 } // StartDevice
 
 //=============================================================================
 #pragma code_seg("PAGE")
-NTSTATUS 
+NTSTATUS
 PnpHandler
 (
-    _In_ DEVICE_OBJECT *_DeviceObject, 
-    _Inout_ IRP *_Irp
+    _In_ DEVICE_OBJECT* _DeviceObject,
+    _Inout_ IRP* _Irp
 )
 /*++
 
 Routine Description:
 
-  Handles PnP IRPs                                                           
+  Handles PnP IRPs
 
 Arguments:
 
@@ -798,13 +995,13 @@ Return Value:
 --*/
 {
     NTSTATUS                ntStatus = STATUS_UNSUCCESSFUL;
-    IO_STACK_LOCATION      *stack;
-    PortClassDeviceContext *ext;
+    IO_STACK_LOCATION* stack;
+    PortClassDeviceContext* ext;
 
     // Documented https://msdn.microsoft.com/en-us/library/windows/hardware/ff544039(v=vs.85).aspx
     // This method will be called in IRQL PASSIVE_LEVEL
 #pragma warning(suppress: 28118)
-    PAGED_CODE(); 
+    PAGED_CODE();
 
     ASSERT(_DeviceObject);
     ASSERT(_Irp);
@@ -826,7 +1023,7 @@ Return Value:
         if (ext->m_pCommon != NULL)
         {
             ext->m_pCommon->Cleanup();
-            
+
             ext->m_pCommon->Release();
             ext->m_pCommon = NULL;
         }
@@ -835,11 +1032,10 @@ Return Value:
     default:
         break;
     }
-    
+
     ntStatus = PcDispatchIrp(_DeviceObject, _Irp);
 
     return ntStatus;
 }
 
 #pragma code_seg()
-
