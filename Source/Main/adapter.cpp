@@ -27,9 +27,11 @@ typedef void (*fnPcDriverUnload) (PDRIVER_OBJECT);
 fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
 extern "C" DRIVER_UNLOAD DriverUnload;
 
-CCircularBuffer* g_GlobalAudioBuffer = nullptr;
+CCircularBuffer* g_UserToMicBuffer = nullptr;
+CCircularBuffer* g_SpeakerToUserBuffer = nullptr;
 
 #define IOCTL_WRITE_AUDIO CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_WRITE_DATA)
+#define IOCTL_READ_AUDIO CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA)
 
 //-----------------------------------------------------------------------------
 // Referenced forward.
@@ -76,19 +78,16 @@ HandleCustomIOCTL(
         return PcDispatchIrp(DeviceObject, Irp);
     }
 
-    DbgPrint("HackAI: HandleCustomIOCTL called - MajorFunction: 0x%X\n", irpStack->MajorFunction);
 
     switch (irpStack->MajorFunction)
     {
     case IRP_MJ_CREATE:
-        DbgPrint("HackAI: IRP_MJ_CREATE received\n");
         Irp->IoStatus.Status = STATUS_SUCCESS;
         Irp->IoStatus.Information = 0;
         IoCompleteRequest(Irp, IO_NO_INCREMENT);
         return STATUS_SUCCESS;
 
     case IRP_MJ_CLOSE:
-        DbgPrint("HackAI: IRP_MJ_CLOSE received\n");
         Irp->IoStatus.Status = STATUS_SUCCESS;
         Irp->IoStatus.Information = 0;
         IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -97,21 +96,18 @@ HandleCustomIOCTL(
     case IRP_MJ_DEVICE_CONTROL:
     {
         ULONG controlCode = irpStack->Parameters.DeviceIoControl.IoControlCode;
-        DbgPrint("HackAI: IRP_MJ_DEVICE_CONTROL received - IoControlCode: 0x%X\n", controlCode);
 
         if (controlCode == IOCTL_WRITE_AUDIO)
         {
             PVOID buffer = Irp->AssociatedIrp.SystemBuffer;
             ULONG length = irpStack->Parameters.DeviceIoControl.InputBufferLength;
 
-            DbgPrint("HackAI: IOCTL_WRITE_AUDIO called - Buffer: %p, Length: %lu\n", buffer, length);
 
             if (buffer && length != 0)
             {
-                if (g_GlobalAudioBuffer)
+                if (g_UserToMicBuffer)
                 {
-                    status = g_GlobalAudioBuffer->Write((PUCHAR)buffer, length);
-                    DbgPrint("HackAI: GlobalAudioBuffer->Write returned 0x%08X\n", status);
+                    status = g_UserToMicBuffer->Write((PUCHAR)buffer, length);
 
                     if (NT_SUCCESS(status))
                     {
@@ -120,14 +116,48 @@ HandleCustomIOCTL(
                 }
                 else
                 {
-                    DbgPrint("HackAI: GlobalAudioBuffer not ready\n");
                     status = STATUS_DEVICE_NOT_READY;
                 }
+            }
+            else
+            {
+                status = STATUS_INVALID_PARAMETER;
+            }
+        }
+        else if (controlCode == IOCTL_READ_AUDIO)
+        {
+            PVOID buffer = Irp->AssociatedIrp.SystemBuffer;
+            ULONG outLength = irpStack->Parameters.DeviceIoControl.OutputBufferLength;
+
+            if (buffer && outLength > 0)
+            {
+                if (g_SpeakerToUserBuffer)
+                {
+                    ULONG bytesRead = 0;
+                    status = g_SpeakerToUserBuffer->Read((PUCHAR)buffer, outLength, &bytesRead, true);
+
+                    if (NT_SUCCESS(status))
+                    {
+                        bytesTransferred = bytesRead;
+                    }
+                    else if (status == STATUS_NO_MORE_ENTRIES)
+                    {
+                        bytesTransferred = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                }
+                else
+                {
+                    status = STATUS_DEVICE_NOT_READY;
+                }
+            }
+            else
+            {
+                status = STATUS_INVALID_PARAMETER;
             }
         }
         else
         {
-            DbgPrint("HackAI: Unsupported IOCTL code: 0x%X\n", controlCode);
             status = STATUS_INVALID_DEVICE_REQUEST;
         }
 
@@ -138,14 +168,12 @@ HandleCustomIOCTL(
     }
 
     default:
-        DbgPrint("HackAI: Unsupported MajorFunction: 0x%X\n", irpStack->MajorFunction);
         Irp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
         Irp->IoStatus.Information = 0;
         IoCompleteRequest(Irp, IO_NO_INCREMENT);
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 }
-
 
 #pragma code_seg("PAGE")
 void ReleaseRegistryStringBuffer()
@@ -188,17 +216,20 @@ Environment:
 
     DPF(D_TERSE, ("[DriverUnload]"));
 
-    DbgPrint(">>>>> [HackAI] DriverUnload called <<<<<");
     UNICODE_STRING symLinkName = RTL_CONSTANT_STRING(L"\\DosDevices\\HackAI_AudioCtrl");
 
     IoDeleteSymbolicLink(&symLinkName);
 
-    if (g_GlobalAudioBuffer)
+    if (g_UserToMicBuffer)
     {
-        DbgPrint(">>>>> [HackAI] Deleting global audio buffer: %p", g_GlobalAudioBuffer);
+        delete g_UserToMicBuffer;
+        g_UserToMicBuffer = nullptr;
+    }
 
-        delete g_GlobalAudioBuffer;
-        g_GlobalAudioBuffer = nullptr;
+    if (g_SpeakerToUserBuffer)
+    {
+        delete g_SpeakerToUserBuffer;
+        g_SpeakerToUserBuffer = nullptr;
     }
 
     if (g_ControlDeviceObject)
@@ -492,8 +523,6 @@ Done:
         return ntStatus;
     }
 
-    DbgPrint("HackAI: IoCreateDevice create successfully.\n");
-    DbgPrint("HackAI: Created control device: %wZ (%p)\n", &deviceName, controlDeviceObject);
     g_ControlDeviceObject = controlDeviceObject;
 
     controlDeviceObject->Flags |= DO_BUFFERED_IO;
@@ -502,7 +531,7 @@ Done:
     ntStatus = IoCreateSymbolicLink(&symLinkName, &deviceName);
     if (!NT_SUCCESS(ntStatus))
     {
-        DbgPrint("HackAI: Failed to create symbolic link: 0x%X\n", ntStatus);
+        DbgPrint("[HackAI] Failed to create symbolic link: 0x%X\n", ntStatus);
         IoDeleteDevice(g_ControlDeviceObject);
         g_ControlDeviceObject = nullptr;
         return ntStatus;
@@ -512,32 +541,52 @@ Done:
     if (!NT_SUCCESS(ntStatus))
     {
         IoDeleteDevice(g_ControlDeviceObject);
-        g_ControlDeviceObject = nullptr;      
+        g_ControlDeviceObject = nullptr;
         return ntStatus;
     }
 
     controlDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
-    g_GlobalAudioBuffer = new (POOL_FLAG_NON_PAGED, 'ABUF') CCircularBuffer();
-    if (!g_GlobalAudioBuffer) {
-        DbgPrint("HackAI: Failed to allocate GlobalAudioBuffer\n");
+    g_UserToMicBuffer = new (POOL_FLAG_NON_PAGED, 'ABUF') CCircularBuffer();
+    if (!g_UserToMicBuffer) {
+        DbgPrint("[HackAI] Failed to allocate GlobalAudioBuffer\n");
         ntStatus = STATUS_INSUFFICIENT_RESOURCES;
     }
     else {
-        ntStatus = g_GlobalAudioBuffer->Initialize(256 * 1024);
+        ntStatus = g_UserToMicBuffer->Initialize(256 * 1024);
         if (!NT_SUCCESS(ntStatus)) {
-            DbgPrint("HackAI: Failed to initialize GlobalAudioBuffer: 0x%08X\n", ntStatus);
-            delete g_GlobalAudioBuffer;
-            g_GlobalAudioBuffer = nullptr;
+            DbgPrint("[HackAI] Failed to initialize GlobalAudioBuffer: 0x%08X\n", ntStatus);
+            delete g_UserToMicBuffer;
+            g_UserToMicBuffer = nullptr;
+        }
+    }
+
+    g_SpeakerToUserBuffer = new (POOL_FLAG_NON_PAGED, 'SPKB') CCircularBuffer();
+    if (!g_SpeakerToUserBuffer) {
+        DbgPrint("[HackAI] Failed to allocate SpeakerToUserBuffer\n");
+        ntStatus = STATUS_INSUFFICIENT_RESOURCES;
+    }
+    else {
+        ntStatus = g_SpeakerToUserBuffer->Initialize(256 * 1024);
+        if (!NT_SUCCESS(ntStatus)) {
+            DbgPrint("[HackAI] Failed to initialize SpeakerToUserBuffer: 0x%08X\n", ntStatus);
+            delete g_SpeakerToUserBuffer;
+            g_SpeakerToUserBuffer = nullptr;
         }
     }
 
     if (!NT_SUCCESS(ntStatus))
     {
-        if (g_GlobalAudioBuffer)
+        if (g_UserToMicBuffer)
         {
-            delete g_GlobalAudioBuffer;
-            g_GlobalAudioBuffer = nullptr;
+            delete g_UserToMicBuffer;
+            g_UserToMicBuffer = nullptr;
+        }
+
+        if (g_SpeakerToUserBuffer)
+        {
+            delete g_SpeakerToUserBuffer;
+            g_SpeakerToUserBuffer = nullptr;
         }
 
         if (g_ControlDeviceObject)
@@ -545,6 +594,7 @@ Done:
             IoDeleteDevice(g_ControlDeviceObject);
             g_ControlDeviceObject = nullptr;
         }
+
 
         if (WdfGetDriver() != NULL)
         {
@@ -555,11 +605,9 @@ Done:
         return ntStatus;
     }
 
-    DbgPrint("HackAI: Setting up MajorFunction dispatch table...\n");
     DriverObject->MajorFunction[IRP_MJ_CREATE] = HandleCustomIOCTL;
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = HandleCustomIOCTL;
     DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = HandleCustomIOCTL;
-    DbgPrint("HackAI: MajorFunction dispatch table set successfully.\n");
     return ntStatus;
 }
 

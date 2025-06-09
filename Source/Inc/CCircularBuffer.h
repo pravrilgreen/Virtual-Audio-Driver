@@ -18,7 +18,7 @@ public:
 
     NTSTATUS Initialize(ULONG size);
     NTSTATUS Write(PUCHAR data, ULONG length);
-    NTSTATUS Read(PUCHAR outBuffer, ULONG length, ULONG* bytesRead);
+    NTSTATUS Read(PUCHAR outBuffer, ULONG length, ULONG* bytesRead, bool zeroPadIfInsufficient);
     ULONG FreeSpace() const;
     ULONG UsedSpace() const;
     void Reset();

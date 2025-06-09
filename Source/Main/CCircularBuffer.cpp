@@ -11,8 +11,6 @@ CCircularBuffer::CCircularBuffer() :
 
 CCircularBuffer::~CCircularBuffer()
 {
-    DbgPrint(">>>>> [HackAI] ~CCircularBuffer called, buffer=%p", m_Buffer);
-
     if (m_Buffer) {
         ExFreePoolWithTag(m_Buffer, 'BufA');
         m_Buffer = nullptr;
@@ -29,16 +27,12 @@ NTSTATUS CCircularBuffer::Initialize(ULONG size)
         return STATUS_INVALID_PARAMETER;
     }
 
-    DbgPrint(">>>>> [HackAI] CCircularBuffer::Initialize called. Size: %lu", size);
-
     if (m_Buffer) {
-        DbgPrint(">>>>> [HackAI] Freeing old buffer: %p", m_Buffer);
         ExFreePoolWithTag(m_Buffer, 'BufA');
         m_Buffer = nullptr;
     }
 
     m_Buffer = (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, size, 'BufA');
-    DbgPrint(">>>>> [HackAI] Allocated new buffer: %p", m_Buffer);
 
     if (!m_Buffer) {
         return STATUS_INSUFFICIENT_RESOURCES;
@@ -70,11 +64,10 @@ NTSTATUS CCircularBuffer::Write(PUCHAR data, ULONG length)
     }
 
     KeReleaseSpinLock(&m_Lock, oldIrql);
-    DbgPrint("HackAI: Write failed - buffer full, FreeSpace: %lu, WriteSize: %lu\n", FreeSpace(), length);
     return STATUS_SUCCESS;
 }
 
-NTSTATUS CCircularBuffer::Read(PUCHAR dest, ULONG length, PULONG bytesRead)
+NTSTATUS CCircularBuffer::Read(PUCHAR dest, ULONG length, PULONG bytesRead, bool zeroPadIfInsufficient)
 {
     if (!dest || !m_Buffer || m_Size == 0 || !bytesRead) {
         return STATUS_INVALID_PARAMETER;
@@ -101,9 +94,14 @@ NTSTATUS CCircularBuffer::Read(PUCHAR dest, ULONG length, PULONG bytesRead)
         m_Tail = (m_Tail + 1) % m_Size;
     }
 
+    KeReleaseSpinLock(&m_Lock, oldIrql);
+
     *bytesRead = toRead;
 
-    KeReleaseSpinLock(&m_Lock, oldIrql);
+    if (zeroPadIfInsufficient && toRead < length) {
+        RtlZeroMemory(dest + toRead, length - toRead);
+    }
+
     return STATUS_SUCCESS;
 }
 
