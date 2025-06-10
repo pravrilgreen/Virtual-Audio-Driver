@@ -1,0 +1,11 @@
+{
+    "microphone": "Microphone (Scarlett 2i2 USB)",
+    "speaker": "Speakers (Scarlett 2i2 USB)",
+    "microphone_level": 50,
+    "speaker_level": 50,
+    "direct_volume": 30,
+    "translated_volume": 80,
+    "llm_model": "Gemma3:12b",
+    "api_url": "http://10.133.134.206/api/tags",
+    "api_token": "tuanlm12"
+}

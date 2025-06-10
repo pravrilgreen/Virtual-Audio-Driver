@@ -8,13 +8,15 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, QRectF, QSize
 from ui_form import Ui_Widget
 from speaker_monitor import SpeakerMonitorThread
+from settings_dialog import SettingsDialog
+from settings_manager import SettingsManager
 
 class Widget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ui = Ui_Widget()
         self.setupUi()
-
+        self.settings_manager = SettingsManager()
         self.speaker_thread = SpeakerMonitorThread()
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
@@ -43,6 +45,7 @@ class Widget(QWidget):
 
         # === New Conversation Button Click Event ===
         self.ui.buttonNewConversation.clicked.connect(self.new_conversation)
+        self.ui.buttonSettings.clicked.connect(self.settings_dialog)
 
     def toggle_mic(self):
         if self.mic_on:
@@ -56,6 +59,11 @@ class Widget(QWidget):
             self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(True)
         self.mic_on = not self.mic_on
+
+    def settings_dialog(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec():
+            print("Settings applied")
 
     def new_conversation(self):
         print("New conversation started")
@@ -82,7 +90,6 @@ class Widget(QWidget):
         self.animations[target_label] = anim
 
     def update_sound_effect(self, target_label: QLabel, volume: int):
-        # --- Hiệu ứng viền glow ---
         effect = self.glow_effects.get(target_label)
         anim = self.animations.get(target_label)
         if not effect or not anim:
