@@ -14,6 +14,7 @@ METHOD_BUFFERED = 0
 FILE_WRITE_DATA = 0x00000002
 IOCTL_INDEX = 0x800
 
+
 def ctl_code(device_type, function, method, access):
     return ((device_type << 16) | (access << 14) | (function << 2) | method)
 
