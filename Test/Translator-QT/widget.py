@@ -1,10 +1,13 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QGraphicsDropShadowEffect, QLabel
-from PySide6.QtGui import QColor
-from PySide6.QtCore import QPropertyAnimation, QEasingCurve, Qt
+import math
+import time
+import numpy as np
+
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
+from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, QRectF, QSize
 from ui_form import Ui_Widget
 from speaker_monitor import SpeakerMonitorThread
-
 
 class Widget(QWidget):
     def __init__(self, parent=None):
@@ -26,51 +29,86 @@ class Widget(QWidget):
         self.add_sound_effect(self.ui.labelCustomerAvatar)
         self.add_sound_effect(self.ui.labelMeAvatar)
 
+        self.avatar_size_animation = QPropertyAnimation(self.ui.labelCustomerAvatar, b"geometry")
+        self.avatar_size_animation.setDuration(200)
+        self.avatar_size_animation.setEasingCurve(QEasingCurve.InOutQuad)
+
+        # === Custom UI Buttons ===
+        self.ui.buttonNewConversation.setStyleSheet("background-color: orange; color: white; font-weight: bold;")
+        self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
+        self.ui.labelMic.setEnabled(False)
+        # === Mic Toggle Initial State ===
+        self.mic_on = False
+        self.ui.buttonMicToggle.clicked.connect(self.toggle_mic)
+
+        # === New Conversation Button Click Event ===
+        self.ui.buttonNewConversation.clicked.connect(self.new_conversation)
+
+    def toggle_mic(self):
+        if self.mic_on:
+            print("Live Translate: OFF")
+            self.ui.buttonMicToggle.setText("Live Translate: OFF")
+            self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
+            self.ui.labelMic.setEnabled(False)
+        else:
+            print("Live Translate: ON")
+            self.ui.buttonMicToggle.setText("Live Translate: ON")
+            self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
+            self.ui.labelMic.setEnabled(True)
+        self.mic_on = not self.mic_on
+
+    def new_conversation(self):
+        print("New conversation started")
+        self.ui.textChatBox.clear()
+        self.ui.textSummaryBox.clear()
+
     def add_sound_effect(self, target_label: QLabel):
+        target_label.setStyleSheet("""
+            border: 3px solid white;
+            border-radius: 25px;
+        """)
+
         effect = QGraphicsDropShadowEffect(self)
-        effect.setColor(QColor(0, 255, 100))
+        effect.setColor(QColor(0, 255, 255))
         effect.setOffset(0, 0)
         effect.setBlurRadius(0)
         target_label.setGraphicsEffect(effect)
         self.glow_effects[target_label] = effect
 
         anim = QPropertyAnimation(effect, b"blurRadius")
-        anim.setDuration(200)
-        anim.setEasingCurve(QEasingCurve.InOutSine)
+        anim.setDuration(300)
+        anim.setEasingCurve(QEasingCurve.InOutQuad)
+        anim.setLoopCount(-1)
         self.animations[target_label] = anim
 
     def update_sound_effect(self, target_label: QLabel, volume: int):
-        volume = max(0, min(volume, 10))
+        # --- Hiệu ứng viền glow ---
         effect = self.glow_effects.get(target_label)
         anim = self.animations.get(target_label)
         if not effect or not anim:
             return
 
-        color = self.volume_to_color(volume)
-        effect.setColor(color)
+        effect.setColor(self.volume_to_color(volume))
 
-        # Nhân đôi độ blur
-        target_radius = volume * 8
+        min_radius = volume * 0.5
+        max_radius = volume * 1.0 + 10
 
         anim.stop()
-        if volume == 0:
-            effect.setBlurRadius(0)
-        else:
-            anim.setStartValue(effect.blurRadius())
-            anim.setEndValue(target_radius)
-            anim.start()
+        anim.setStartValue(min_radius)
+        anim.setEndValue(max_radius)
+        anim.start()
 
     def volume_to_color(self, volume: int) -> QColor:
-        if volume < 9:
-            t = volume / 8.0 
-            r = int(50 + t * 150)
-            g = 255
-            b = int(100 - t * 80)
+        if volume < 20:
+            return QColor(0, 255, 255)
+        elif volume < 50:
+            return QColor(0, 200, 150)
+        elif volume < 70:
+            return QColor(0, 255, 0)
+        elif volume < 90:
+            return QColor(255, 165, 0)
         else:
-            r = 255
-            g = 50
-            b = 20
-        return QColor(r, g, b)
+            return QColor(255, 0, 0)
 
     def closeEvent(self, event):
         self.speaker_thread.stop()

@@ -44,7 +44,7 @@ class Ui_Widget(object):
         self.labelCustomerAvatar.setObjectName(u"labelCustomerAvatar")
         self.labelCustomerAvatar.setMinimumSize(QSize(50, 50))
         self.labelCustomerAvatar.setMaximumSize(QSize(50, 50))
-        self.labelCustomerAvatar.setPixmap(QPixmap(u"avatar.png"))
+        self.labelCustomerAvatar.setPixmap(QPixmap(u"images/avatar.png"))
         self.labelCustomerAvatar.setScaledContents(True)
         self.labelCustomerAvatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -67,12 +67,17 @@ class Ui_Widget(object):
         self.layoutCustomer.addWidget(self.labelCustomerText)
 
         self.comboCustomerLang = QComboBox(Widget)
-        self.comboCustomerLang.addItem("")
-        self.comboCustomerLang.addItem("")
-        self.comboCustomerLang.addItem("")
+        icon = QIcon()
+        icon.addFile(u"images/jp.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.comboCustomerLang.addItem(icon, "")
+        icon1 = QIcon()
+        icon1.addFile(u"images/uk.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.comboCustomerLang.addItem(icon1, "")
+        icon2 = QIcon()
+        icon2.addFile(u"images/vn.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.comboCustomerLang.addItem(icon2, "")
         self.comboCustomerLang.setObjectName(u"comboCustomerLang")
         self.comboCustomerLang.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
-        self.comboCustomerLang.setCurrentText(u"Japanese")
 
         self.layoutCustomer.addWidget(self.comboCustomerLang)
 
@@ -93,7 +98,7 @@ class Ui_Widget(object):
         self.labelMic.setObjectName(u"labelMic")
         self.labelMic.setMinimumSize(QSize(80, 80))
         self.labelMic.setMaximumSize(QSize(80, 80))
-        self.labelMic.setPixmap(QPixmap(u"micro.png"))
+        self.labelMic.setPixmap(QPixmap(u"images/micro.png"))
         self.labelMic.setScaledContents(True)
         self.labelMic.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -131,7 +136,7 @@ class Ui_Widget(object):
         self.labelMeAvatar.setObjectName(u"labelMeAvatar")
         self.labelMeAvatar.setMinimumSize(QSize(50, 50))
         self.labelMeAvatar.setMaximumSize(QSize(50, 50))
-        self.labelMeAvatar.setPixmap(QPixmap(u"avatar.png"))
+        self.labelMeAvatar.setPixmap(QPixmap(u"images/avatar.png"))
         self.labelMeAvatar.setScaledContents(True)
         self.labelMeAvatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -154,9 +159,9 @@ class Ui_Widget(object):
         self.layoutMe.addWidget(self.labelMeText)
 
         self.comboMyLang = QComboBox(Widget)
-        self.comboMyLang.addItem("")
-        self.comboMyLang.addItem("")
-        self.comboMyLang.addItem("")
+        self.comboMyLang.addItem(icon2, "")
+        self.comboMyLang.addItem(icon1, "")
+        self.comboMyLang.addItem(icon, "")
         self.comboMyLang.setObjectName(u"comboMyLang")
 
         self.layoutMe.addWidget(self.comboMyLang)
@@ -204,15 +209,15 @@ class Ui_Widget(object):
     def retranslateUi(self, Widget):
         Widget.setWindowTitle(QCoreApplication.translate("Widget", u"Translator Tool", None))
         self.labelCustomerText.setText(QCoreApplication.translate("Widget", u"Customer", None))
-        self.comboCustomerLang.setItemText(0, QCoreApplication.translate("Widget", u"Japanese", None))
-        self.comboCustomerLang.setItemText(1, QCoreApplication.translate("Widget", u"English", None))
-        self.comboCustomerLang.setItemText(2, QCoreApplication.translate("Widget", u"Vietnamese", None))
+        self.comboCustomerLang.setItemText(0, QCoreApplication.translate("Widget", u"Japanese (\u65e5\u672c)", None))
+        self.comboCustomerLang.setItemText(1, QCoreApplication.translate("Widget", u"English (English)", None))
+        self.comboCustomerLang.setItemText(2, QCoreApplication.translate("Widget", u"Vietnamese (Vi\u1ec7t Nam)", None))
 
-        self.buttonMicToggle.setText(QCoreApplication.translate("Widget", u"ON", None))
+        self.buttonMicToggle.setText(QCoreApplication.translate("Widget", u"Live Translate: OFF", None))
         self.labelMeText.setText(QCoreApplication.translate("Widget", u"Me", None))
-        self.comboMyLang.setItemText(0, QCoreApplication.translate("Widget", u"Vietnamese", None))
-        self.comboMyLang.setItemText(1, QCoreApplication.translate("Widget", u"English", None))
-        self.comboMyLang.setItemText(2, QCoreApplication.translate("Widget", u"Japanese", None))
+        self.comboMyLang.setItemText(0, QCoreApplication.translate("Widget", u"Vietnamese (Vi\u1ec7t Nam)", None))
+        self.comboMyLang.setItemText(1, QCoreApplication.translate("Widget", u"English (English)", None))
+        self.comboMyLang.setItemText(2, QCoreApplication.translate("Widget", u"Japanese (\u65e5\u672c)", None))
 
         self.buttonNewConversation.setText(QCoreApplication.translate("Widget", u"NEW Conversation", None))
         self.textChatBox.setPlaceholderText(QCoreApplication.translate("Widget", u"Meeting chats...", None))

@@ -59,7 +59,7 @@
               </size>
              </property>
              <property name="pixmap">
-              <pixmap>avatar.png</pixmap>
+              <pixmap>images/avatar.png</pixmap>
              </property>
              <property name="scaledContents">
               <bool>true</bool>
@@ -104,22 +104,31 @@
          <property name="layoutDirection">
           <enum>Qt::LayoutDirection::LeftToRight</enum>
          </property>
-         <property name="currentText">
-          <string notr="true">Japanese</string>
-         </property>
          <item>
           <property name="text">
-           <string>Japanese</string>
+           <string>Japanese (日本)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/jp.png</normaloff>images/jp.png</iconset>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>English</string>
+           <string>English (English)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/uk.png</normaloff>images/uk.png</iconset>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>Vietnamese</string>
+           <string>Vietnamese (Việt Nam)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/vn.png</normaloff>images/vn.png</iconset>
           </property>
          </item>
         </widget>
@@ -163,7 +172,7 @@
               </size>
              </property>
              <property name="pixmap">
-              <pixmap>micro.png</pixmap>
+              <pixmap>images/micro.png</pixmap>
              </property>
              <property name="scaledContents">
               <bool>true</bool>
@@ -196,7 +205,7 @@
        <item>
         <widget class="QPushButton" name="buttonMicToggle">
          <property name="text">
-          <string>ON</string>
+          <string>Live Translate: OFF</string>
          </property>
         </widget>
        </item>
@@ -239,7 +248,7 @@
               </size>
              </property>
              <property name="pixmap">
-              <pixmap>avatar.png</pixmap>
+              <pixmap>images/avatar.png</pixmap>
              </property>
              <property name="scaledContents">
               <bool>true</bool>
@@ -283,17 +292,29 @@
         <widget class="QComboBox" name="comboMyLang">
          <item>
           <property name="text">
-           <string>Vietnamese</string>
+           <string>Vietnamese (Việt Nam)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/vn.png</normaloff>images/vn.png</iconset>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>English</string>
+           <string>English (English)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/uk.png</normaloff>images/uk.png</iconset>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>Japanese</string>
+           <string>Japanese (日本)</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>images/jp.png</normaloff>images/jp.png</iconset>
           </property>
          </item>
         </widget>

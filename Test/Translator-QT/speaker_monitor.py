@@ -8,6 +8,7 @@ import sounddevice as sd
 
 class SpeakerMonitorThread(QThread):
     volume_signal = Signal(int)
+    fft_signal = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,19 +28,19 @@ class SpeakerMonitorThread(QThread):
         FILE_ATTRIBUTE_NORMAL = 0x80
         FILE_DEVICE_UNKNOWN = 0x00000022
         METHOD_BUFFERED = 0
-        FILE_READ_DATA = 0x0001
+        FILE_WRITE_DATA = 0x0002
 
         def CTL_CODE(DeviceType, Function, Method, Access):
             return (DeviceType << 16) | (Access << 14) | (Function << 2) | Method
 
-        IOCTL_READ_AUDIO = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA)
-        DEVICE_NAME = r"\\.\HackAI_AudioCtrl"
+        
+        IOCTL_READ_AUDIO = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_WRITE_DATA)
+        DEVICE_NAME = r"\\.\VirtualAudio"
         READ_SIZE = 4096
         CHANNELS = 2
         SAMPLE_RATE = 48000
-        OUTPUT_DEVICE_NAME = "Scarlett 2i2 USB"
+        OUTPUT_DEVICE_NAME = "Scarlett 2i2"
 
-        # Khởi tạo handle cho thiết bị ảo
         kernel32 = ctypes.windll.kernel32
         CreateFileW = kernel32.CreateFileW
         DeviceIoControl = kernel32.DeviceIoControl
@@ -61,14 +62,11 @@ class SpeakerMonitorThread(QThread):
 
         print("[INFO] SpeakerMonitorThread started.")
 
-        # Tìm thiết bị đầu ra Scarlett
         output_device_index = self.find_output_device(OUTPUT_DEVICE_NAME)
         if output_device_index is None:
             print(f"[ERROR] Output device '{OUTPUT_DEVICE_NAME}' not found.")
             CloseHandle(handle)
             return
-
-        # Khởi tạo audio stream
         try:
             self.stream = sd.OutputStream(
                 samplerate=SAMPLE_RATE,
@@ -104,7 +102,6 @@ class SpeakerMonitorThread(QThread):
 
                     audio = np.frombuffer(raw, dtype=np.int16)
 
-                    # Đảm bảo chia hết cho số kênh
                     if len(audio) % CHANNELS != 0:
                         audio = audio[:len(audio) - (len(audio) % CHANNELS)]
 
@@ -120,10 +117,16 @@ class SpeakerMonitorThread(QThread):
                     volume_threshold = 300
                     MAX_RMS = 9000
                     adjusted_rms = max(0, rms - volume_threshold)
-                    volume = int(min(10, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 10))
+                    volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
 
-                    print(f"[DEBUG] RMS: {rms:.2f} | Volume: {volume}")
+                    #print(f"[DEBUG] RMS: {rms:.2f} | Volume: {volume}")
                     self.volume_signal.emit(volume)
+
+                    fft = np.fft.rfft(mono, n=128)
+                    fft_magnitude = np.abs(fft)
+                    fft_magnitude = fft_magnitude / (np.max(fft_magnitude) + 1e-6)
+                    self.fft_signal.emit(fft_magnitude[:64].tolist())  # 64 bands
+                    #print("[DEBUG] FFT:", fft_magnitude[:10])
 
                     try:
                         self.stream.write(audio)
