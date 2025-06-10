@@ -115,4 +115,4 @@ def send_wav_to_virtual_driver(wav_path):
 
 # ===== RUN EXAMPLE =====
 if __name__ == "__main__":
-    send_wav_to_virtual_driver("sample_2.wav")
+    send_wav_to_virtual_driver("sample_1.wav")

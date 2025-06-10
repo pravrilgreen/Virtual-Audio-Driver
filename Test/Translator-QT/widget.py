@@ -1,6 +1,10 @@
 import sys
 import math
 import numpy as np
+import time
+import threading
+import librosa
+import soundfile as sf
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
 from PySide6.QtGui import QColor
@@ -8,28 +12,49 @@ from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from ui_form import Ui_Widget
 from speaker_monitor import SpeakerMonitorThread
-from mic_monitor import MicMonitorThread
+from mic_monitor import MicMonitorThread, VirtualMicWriter, VirtualMicKeepAlive, PCMPlayerThread
 from settings_dialog import SettingsDialog
 from settings_manager import SettingsManager
+
+def wav_to_pcm_bytes(wav_path: str) -> bytes:
+    data, sr = sf.read(wav_path, always_2d=True)
+
+    # Resample if needed
+    if sr != 48000:
+        data = librosa.resample(data.T, orig_sr=sr, target_sr=48000).T
+
+    # Mono → stereo if needed
+    if data.shape[1] == 1:
+        data = np.repeat(data, 2, axis=1)
+
+    # Normalize and convert to int32
+    data = np.clip(data, -1.0, 1.0)
+    pcm_data = (data * 2147483647).astype(np.int32)
+    return pcm_data.tobytes()
 
 
 class Widget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.mic_thread = None
+        self.pcm_thread = None
         self.mic_on = False
         self.ui = Ui_Widget()
         self.setupUi()
         self.settings_manager = SettingsManager()
 
-        # Start speaker monitor
+        self.virtual_mic_keepalive = VirtualMicKeepAlive("Virtual Audio Device - NS Team")
+        self.virtual_mic_keepalive.start()
+
+        self.virtual_writer = VirtualMicWriter()
+        self.virtual_writer.start()
+
         self.speaker_thread = SpeakerMonitorThread()
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
         )
         self.speaker_thread.start()
 
-        # Start mic monitor thread immediately with saved mic
         self.start_initial_mic_thread()
 
     def setupUi(self):
@@ -44,7 +69,6 @@ class Widget(QWidget):
         self.avatar_size_animation.setDuration(200)
         self.avatar_size_animation.setEasingCurve(QEasingCurve.InOutQuad)
 
-        # UI Buttons
         self.ui.buttonNewConversation.setStyleSheet("background-color: orange; color: white; font-weight: bold;")
         self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
         self.ui.labelMic.setEnabled(False)
@@ -56,23 +80,49 @@ class Widget(QWidget):
     def start_initial_mic_thread(self):
         mic_device_name = self.settings_manager.get("microphone", "")
         print(f"[INIT] Starting mic thread with device: {mic_device_name}")
-        self.mic_thread = MicMonitorThread(input_device_name=mic_device_name)
+        self.mic_thread = MicMonitorThread(
+            input_device_name=mic_device_name,
+            writer=self.virtual_writer,
+            push_to_virtual=not self.mic_on  # If Translate OFF, enable passthrough
+        )
         self.mic_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
         )
         self.mic_thread.start()
 
+
     def toggle_mic(self):
         if self.mic_on:
+            # Turning OFF Live Translate
             print("Live Translate: OFF")
             self.ui.buttonMicToggle.setText("Live Translate: OFF")
             self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(False)
+
+            if self.pcm_thread:
+                self.pcm_thread.stop()
+                self.pcm_thread = None
+
+            if self.mic_thread:
+                self.mic_thread.set_virtual_output_enabled(True)
+
         else:
+            # Turning ON Live Translate
             print("Live Translate: ON")
             self.ui.buttonMicToggle.setText("Live Translate: ON")
             self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(True)
+
+            if self.mic_thread:
+                self.mic_thread.set_virtual_output_enabled(False)
+
+            try:
+                pcm_data = wav_to_pcm_bytes("sample.wav")
+                self.pcm_thread = PCMPlayerThread(pcm_data, self.virtual_writer)
+                self.pcm_thread.start()
+            except Exception as e:
+                print(f"[WAV→PCM] Failed to convert/playback: {e}")
+
         self.mic_on = not self.mic_on
 
     def restart_mic_thread(self):
@@ -163,6 +213,9 @@ class Widget(QWidget):
         if self.mic_thread:
             self.mic_thread.stop()
             self.mic_thread.wait()
+
+        if self.pcm_thread:
+            self.pcm_thread.stop()
 
         super().closeEvent(event)
 
