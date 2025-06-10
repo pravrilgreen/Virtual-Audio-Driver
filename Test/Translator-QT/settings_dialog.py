@@ -140,3 +140,6 @@ class SettingsDialog(QDialog):
         s.save_settings()
 
         self.accept()
+
+    def get_selected_microphone(self):
+        return self.microphone_combo.currentText()

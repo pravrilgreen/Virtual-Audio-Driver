@@ -1,27 +1,36 @@
 import sys
 import math
-import time
 import numpy as np
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, QRectF, QSize
+from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+
 from ui_form import Ui_Widget
 from speaker_monitor import SpeakerMonitorThread
+from mic_monitor import MicMonitorThread
 from settings_dialog import SettingsDialog
 from settings_manager import SettingsManager
+
 
 class Widget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.mic_thread = None
+        self.mic_on = False
         self.ui = Ui_Widget()
         self.setupUi()
         self.settings_manager = SettingsManager()
+
+        # Start speaker monitor
         self.speaker_thread = SpeakerMonitorThread()
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
         )
         self.speaker_thread.start()
+
+        # Start mic monitor thread immediately with saved mic
+        self.start_initial_mic_thread()
 
     def setupUi(self):
         self.ui.setupUi(self)
@@ -35,17 +44,23 @@ class Widget(QWidget):
         self.avatar_size_animation.setDuration(200)
         self.avatar_size_animation.setEasingCurve(QEasingCurve.InOutQuad)
 
-        # === Custom UI Buttons ===
+        # UI Buttons
         self.ui.buttonNewConversation.setStyleSheet("background-color: orange; color: white; font-weight: bold;")
         self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
         self.ui.labelMic.setEnabled(False)
-        # === Mic Toggle Initial State ===
-        self.mic_on = False
-        self.ui.buttonMicToggle.clicked.connect(self.toggle_mic)
 
-        # === New Conversation Button Click Event ===
+        self.ui.buttonMicToggle.clicked.connect(self.toggle_mic)
         self.ui.buttonNewConversation.clicked.connect(self.new_conversation)
         self.ui.buttonSettings.clicked.connect(self.settings_dialog)
+
+    def start_initial_mic_thread(self):
+        mic_device_name = self.settings_manager.get("microphone", "")
+        print(f"[INIT] Starting mic thread with device: {mic_device_name}")
+        self.mic_thread = MicMonitorThread(input_device_name=mic_device_name)
+        self.mic_thread.volume_signal.connect(
+            lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
+        )
+        self.mic_thread.start()
 
     def toggle_mic(self):
         if self.mic_on:
@@ -60,10 +75,34 @@ class Widget(QWidget):
             self.ui.labelMic.setEnabled(True)
         self.mic_on = not self.mic_on
 
+    def restart_mic_thread(self):
+        mic_device_name = self.settings_manager.get("microphone", "")
+        print(f"[Mic] Restarting thread with: {mic_device_name}")
+
+        if self.mic_thread:
+            self.mic_thread.stop()
+            self.mic_thread.wait()
+
+        self.mic_thread = MicMonitorThread(input_device_name=mic_device_name)
+        self.mic_thread.volume_signal.connect(
+            lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
+        )
+        self.mic_thread.start()
+
     def settings_dialog(self):
         dialog = SettingsDialog(self)
+        old_mic_device = self.settings_manager.get("microphone", "")
+
         if dialog.exec():
-            print("Settings applied")
+            new_mic_device = dialog.get_selected_microphone()
+            print(f"[SETTINGS] Selected mic: {new_mic_device}")
+
+            if new_mic_device != old_mic_device:
+                print("[SETTINGS] Mic device changed, restarting mic thread.")
+                self.settings_manager.set("microphone", new_mic_device)
+                self.restart_mic_thread()
+            else:
+                print("[SETTINGS] Mic device unchanged.")
 
     def new_conversation(self):
         print("New conversation started")
@@ -120,6 +159,11 @@ class Widget(QWidget):
     def closeEvent(self, event):
         self.speaker_thread.stop()
         self.speaker_thread.wait()
+
+        if self.mic_thread:
+            self.mic_thread.stop()
+            self.mic_thread.wait()
+
         super().closeEvent(event)
 
 

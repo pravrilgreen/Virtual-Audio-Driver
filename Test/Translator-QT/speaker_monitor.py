@@ -4,7 +4,7 @@ import numpy as np
 import time
 import math
 import sounddevice as sd
-
+from stts.stream_sender import WebSocketPCMClient  # 💡 WebSocket client bạn cần tạo
 
 class SpeakerMonitorThread(QThread):
     volume_signal = Signal(int)
@@ -13,7 +13,7 @@ class SpeakerMonitorThread(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.running = True
-        self.stream = None
+        self.ws_client = WebSocketPCMClient(role="customer")  # "customer" hoặc "user"
 
     def find_output_device(self, name):
         for i, dev in enumerate(sd.query_devices()):
@@ -33,13 +33,11 @@ class SpeakerMonitorThread(QThread):
         def CTL_CODE(DeviceType, Function, Method, Access):
             return (DeviceType << 16) | (Access << 14) | (Function << 2) | Method
 
-        
         IOCTL_READ_AUDIO = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_WRITE_DATA)
         DEVICE_NAME = r"\\.\VirtualAudio"
         READ_SIZE = 4096
         CHANNELS = 2
         SAMPLE_RATE = 48000
-        OUTPUT_DEVICE_NAME = "Scarlett 2i2"
 
         kernel32 = ctypes.windll.kernel32
         CreateFileW = kernel32.CreateFileW
@@ -62,24 +60,8 @@ class SpeakerMonitorThread(QThread):
 
         print("[INFO] SpeakerMonitorThread started.")
 
-        output_device_index = self.find_output_device(OUTPUT_DEVICE_NAME)
-        if output_device_index is None:
-            print(f"[ERROR] Output device '{OUTPUT_DEVICE_NAME}' not found.")
-            CloseHandle(handle)
-            return
-        try:
-            self.stream = sd.OutputStream(
-                samplerate=SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype='int16',
-                device=output_device_index,
-                blocksize=READ_SIZE // (2 * CHANNELS),
-            )
-            self.stream.start()
-        except Exception as e:
-            print("[ERROR] Cannot start audio output stream:", e)
-            CloseHandle(handle)
-            return
+        # Connect WebSocket
+        self.ws_client.connect()
 
         try:
             while self.running:
@@ -118,30 +100,22 @@ class SpeakerMonitorThread(QThread):
                     MAX_RMS = 9000
                     adjusted_rms = max(0, rms - volume_threshold)
                     volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
-
-                    #print(f"[DEBUG] RMS: {rms:.2f} | Volume: {volume}")
                     self.volume_signal.emit(volume)
 
                     fft = np.fft.rfft(mono, n=128)
                     fft_magnitude = np.abs(fft)
                     fft_magnitude = fft_magnitude / (np.max(fft_magnitude) + 1e-6)
-                    self.fft_signal.emit(fft_magnitude[:64].tolist())  # 64 bands
-                    #print("[DEBUG] FFT:", fft_magnitude[:10])
+                    self.fft_signal.emit(fft_magnitude[:64].tolist())
+                    self.ws_client.send_pcm_chunk(raw)
 
-                    try:
-                        self.stream.write(audio)
-                    except Exception as e:
-                        print("[WARN] Audio playback failed:", e)
                 else:
                     time.sleep(0.005)
 
         except Exception as e:
             print("[ERROR]", e)
         finally:
-            if self.stream:
-                self.stream.stop()
-                self.stream.close()
             CloseHandle(handle)
+            self.ws_client.disconnect()
             print("[INFO] SpeakerMonitorThread stopped.")
 
     def stop(self):

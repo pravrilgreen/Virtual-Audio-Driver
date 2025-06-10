@@ -275,13 +275,13 @@ class Ui_Widget(object):
 
     def retranslateUi(self, Widget):
         Widget.setWindowTitle(QCoreApplication.translate("Widget", u"NS Team", None))
-        self.labelCustomerText.setText(QCoreApplication.translate("Widget", u"Customer", None))
+        self.labelCustomerText.setText(QCoreApplication.translate("Widget", u"Other(s)", None))
         self.comboCustomerLang.setItemText(0, QCoreApplication.translate("Widget", u"Japanese (\u65e5\u672c)", None))
         self.comboCustomerLang.setItemText(1, QCoreApplication.translate("Widget", u"English (English)", None))
         self.comboCustomerLang.setItemText(2, QCoreApplication.translate("Widget", u"Vietnamese (Vi\u1ec7t Nam)", None))
 
         self.buttonMicToggle.setText(QCoreApplication.translate("Widget", u"Live Translate: OFF", None))
-        self.labelMeText.setText(QCoreApplication.translate("Widget", u"Me", None))
+        self.labelMeText.setText(QCoreApplication.translate("Widget", u"User", None))
         self.comboMyLang.setItemText(0, QCoreApplication.translate("Widget", u"Vietnamese (Vi\u1ec7t Nam)", None))
         self.comboMyLang.setItemText(1, QCoreApplication.translate("Widget", u"English (English)", None))
         self.comboMyLang.setItemText(2, QCoreApplication.translate("Widget", u"Japanese (\u65e5\u672c)", None))

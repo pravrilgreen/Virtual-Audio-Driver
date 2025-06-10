@@ -8,18 +8,16 @@ import librosa
 import os
 
 # ===== DRIVER CONFIG =====
-DEVICE_NAME = r"\\.\HackAI_AudioCtrl"
+DEVICE_NAME = r"\\.\VirtualAudio"
 FILE_DEVICE_UNKNOWN = 0x00000022
-IOCTL_INDEX = 0x800
 METHOD_BUFFERED = 0
 FILE_WRITE_DATA = 0x00000002
+IOCTL_INDEX = 0x800
 
-IOCTL_WRITE_AUDIO = (
-    (FILE_DEVICE_UNKNOWN << 16) |
-    (FILE_WRITE_DATA << 14) |
-    (IOCTL_INDEX << 2) |
-    METHOD_BUFFERED
-)
+def ctl_code(device_type, function, method, access):
+    return ((device_type << 16) | (access << 14) | (function << 2) | method)
+
+IOCTL_VIRTUALAUDIO_WRITE = ctl_code(FILE_DEVICE_UNKNOWN, IOCTL_INDEX, METHOD_BUFFERED, FILE_WRITE_DATA)
 
 CHUNK_SIZE = 4096  # bytes per chunk
 DESIRED_SAMPLE_RATE = 48000
@@ -90,7 +88,7 @@ def send_wav_to_virtual_driver(wav_path):
             expected_time = start_time + (chunk_index * frames_per_chunk / samplerate)
 
             try:
-                win32file.DeviceIoControl(handle, IOCTL_WRITE_AUDIO, chunk, None)
+                win32file.DeviceIoControl(handle, IOCTL_VIRTUALAUDIO_WRITE, chunk, None)
             except pywintypes.error as e:
                 if e.winerror == 234:  # ERROR_MORE_DATA
                     continue
