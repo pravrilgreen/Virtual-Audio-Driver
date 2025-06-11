@@ -44,3 +44,30 @@ def list_output_devices():
                 result.append(name)
 
     return result
+
+def find_input_device_index_by_name(name):
+    devices = sd.query_devices()
+    accepted_hostapis = set(get_accepted_hostapi_indices())
+
+    for i, d in enumerate(devices):
+        if (
+            d["hostapi"] in accepted_hostapis
+            and d["max_input_channels"] > 0
+            and name.lower() in d["name"].lower()
+        ):
+            return i
+    return None
+
+
+def find_output_device_index_by_name(name):
+    devices = sd.query_devices()
+    accepted_hostapis = set(get_accepted_hostapi_indices())
+
+    for i, d in enumerate(devices):
+        if (
+            d["hostapi"] in accepted_hostapis
+            and d["max_output_channels"] > 0
+            and name.lower() in d["name"].lower()
+        ):
+            return i
+    return None

@@ -17,6 +17,7 @@ from core.mic_monitor import MicMonitorThread, VirtualMicWriter, PCMPlayerThread
 from gui.settings_dialog import SettingsDialog
 from settings_manager import SettingsManager
 from core.virtual_audio import VirtualSpeakerKeepAlive, VirtualMicKeepAlive
+from devices.audio_devices import find_output_device_index_by_name
 
 def wav_to_pcm_bytes(wav_path: str) -> bytes:
     data, sr = sf.read(wav_path, always_2d=True)
@@ -34,7 +35,6 @@ def wav_to_pcm_bytes(wav_path: str) -> bytes:
     pcm_data = (data * 2147483647).astype(np.int32)
     return pcm_data.tobytes()
 
-
 class Widget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,21 +45,31 @@ class Widget(QWidget):
         self.setupUi()
         self.settings_manager = SettingsManager()
 
+        # === Virtual Devices Keep Alive ===
         self.virtual_mic_keepalive = VirtualMicKeepAlive("Virtual Audio Device - NS Team")
         self.virtual_mic_keepalive.start()
         self.virtual_speaker_keepalive = VirtualSpeakerKeepAlive("Virtual Audio Device - NS Team")
         self.virtual_speaker_keepalive.start()
 
+        # === Virtual Mic Writer ===
         self.virtual_writer = VirtualMicWriter()
         self.virtual_writer.start()
-        
+
+        # === Speaker Monitor Thread ===
+        from devices.audio_devices import find_output_device_index_by_name
+        speaker_device_name = self.settings_manager.get("speaker", "")
+        speaker_device_index = find_output_device_index_by_name(speaker_device_name)
+
         self.speaker_thread = SpeakerMonitorThread()
+        self.speaker_thread.output_device_index = speaker_device_index
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
         )
         self.speaker_thread.start()
 
+        # === Mic Monitor Thread ===
         self.start_initial_mic_thread()
+
 
     def setupUi(self):
         self.ui.setupUi(self)
@@ -159,17 +169,44 @@ class Widget(QWidget):
     def settings_dialog(self):
         dialog = SettingsDialog(self)
         old_mic_device = self.settings_manager.get("microphone", "")
+        old_speaker_device = self.settings_manager.get("speaker", "")
 
         if dialog.exec():
             new_mic_device = dialog.get_selected_microphone()
-            print(f"[SETTINGS] Selected mic: {new_mic_device}")
+            new_speaker_device = dialog.speaker_combo.currentText()
 
+            # Mic changed
             if new_mic_device != old_mic_device:
                 print("[SETTINGS] Mic device changed, restarting mic thread.")
                 self.settings_manager.set("microphone", new_mic_device)
                 self.restart_mic_thread()
             else:
                 print("[SETTINGS] Mic device unchanged.")
+
+            # Speaker changed
+            if new_speaker_device != old_speaker_device:
+                print("[SETTINGS] Speaker device changed, updating speaker thread.")
+                self.settings_manager.set("speaker", new_speaker_device)
+                self.restart_speaker_thread()
+            else:
+                print("[SETTINGS] Speaker device unchanged.")
+
+
+    def restart_speaker_thread(self):
+        speaker_device_name = self.settings_manager.get("speaker", "")
+        from devices.audio_devices import find_output_device_index_by_name
+        index = find_output_device_index_by_name(speaker_device_name)
+
+        if self.speaker_thread:
+            self.speaker_thread.stop()
+            self.speaker_thread.wait()
+
+        self.speaker_thread = SpeakerMonitorThread()
+        self.speaker_thread.output_device_index = index
+        self.speaker_thread.volume_signal.connect(
+            lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
+        )
+        self.speaker_thread.start()
 
     def new_conversation(self):
         print("New conversation started")
