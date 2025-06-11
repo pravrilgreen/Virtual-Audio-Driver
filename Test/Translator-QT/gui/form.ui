@@ -527,13 +527,6 @@
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QTextEdit" name="textSummaryBox">
-       <property name="placeholderText">
-        <string>LLM summary area...</string>
-       </property>
-      </widget>
-     </item>
     </layout>
    </item>
   </layout>

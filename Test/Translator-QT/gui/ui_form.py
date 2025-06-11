@@ -259,11 +259,6 @@ class Ui_Widget(object):
 
         self.hboxLayout.addWidget(self.textChatBox)
 
-        self.textSummaryBox = QTextEdit(Widget)
-        self.textSummaryBox.setObjectName(u"textSummaryBox")
-
-        self.hboxLayout.addWidget(self.textSummaryBox)
-
 
         self.verticalLayoutMain.addLayout(self.hboxLayout)
 
@@ -291,6 +286,5 @@ class Ui_Widget(object):
         self.buttonSettings.setToolTip(QCoreApplication.translate("Widget", u"Settings", None))
 #endif // QT_CONFIG(tooltip)
         self.textChatBox.setPlaceholderText(QCoreApplication.translate("Widget", u"Meeting chats...", None))
-        self.textSummaryBox.setPlaceholderText(QCoreApplication.translate("Widget", u"LLM summary area...", None))
     # retranslateUi
 
