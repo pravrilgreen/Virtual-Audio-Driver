@@ -77,7 +77,6 @@ class MicMonitorThread(QThread):
         settings = SettingsManager()
         direct_volume = settings.get("direct_volume", 100)
         translated_volume = settings.get("translated_volume", 100)
-        print(f"[MicMixer] direct={direct_volume}, translated={translated_volume}, mic_level={mic_level}")
 
         mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
         mixed = mixer.mix(mic_stereo, translated)

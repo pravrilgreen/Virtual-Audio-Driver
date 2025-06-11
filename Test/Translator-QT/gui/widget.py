@@ -119,10 +119,6 @@ class Widget(QWidget):
                 self.pcm_thread.join()
                 self.pcm_thread = None
 
-            # Enable direct mic passthrough to virtual mic
-            if self.mic_thread:
-                self.mic_thread.set_virtual_output_enabled(True)
-
             # Disable translation (stop sending speaker audio to socket)
             self.speaker_thread.set_translation_enabled(False)
 
@@ -134,7 +130,6 @@ class Widget(QWidget):
             self.ui.labelMic.setEnabled(True)
 
             if self.mic_thread:
-                self.mic_thread.set_virtual_output_enabled(False)
 
                 def on_translated_audio(data_bytes):
                     if self.mic_thread:

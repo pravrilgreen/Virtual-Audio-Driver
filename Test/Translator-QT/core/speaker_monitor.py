@@ -57,7 +57,6 @@ class SpeakerMonitorThread(QThread):
                 direct_volume = settings.get("direct_volume", 100)
                 translated_volume = settings.get("translated_volume", 100)
                 speaker_level = settings.get("speaker_level", 100)
-                print(f"[SpeakerMixer] direct={direct_volume}, translated={translated_volume}, speaker={speaker_level}")
 
                 if self.translated_audio_buffer is not None:
                     translated = self.translated_audio_buffer[:audio.shape[0]]
