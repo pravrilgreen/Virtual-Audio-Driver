@@ -56,8 +56,9 @@ def find_input_device_index_by_name(name):
             and name.lower() in d["name"].lower()
         ):
             return i
-    return None
 
+    print(f"[WARN] Input device '{name}' not found. Falling back to default.")
+    return None
 
 def find_output_device_index_by_name(name):
     devices = sd.query_devices()

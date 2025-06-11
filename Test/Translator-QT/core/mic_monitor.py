@@ -8,6 +8,8 @@ import time
 import win32file
 import win32con
 import pywintypes
+from core.audio_mixer import AudioMixer
+from settings_manager import SettingsManager
 
 # ==== MIC MONITOR THREAD ====
 class MicMonitorThread(QThread):
@@ -20,6 +22,14 @@ class MicMonitorThread(QThread):
         self.push_to_virtual = push_to_virtual
         self.running = True
         self.stream = None
+        self.translated_audio_buffer = None
+
+    def set_translated_audio(self, pcm_bytes: bytes):
+        """Receive translated audio bytes from socket"""
+        arr = np.frombuffer(pcm_bytes, dtype=np.int16)
+        if arr.size % 2 != 0:
+            arr = arr[:-1]
+        self.translated_audio_buffer = arr.reshape(-1, 2)
 
     def find_input_device(self, name):
         for i, dev in enumerate(sd.query_devices()):
@@ -50,6 +60,31 @@ class MicMonitorThread(QThread):
 
     def audio_callback(self, indata, frames, time_info, status):
         mono = indata[:, 0]
+
+        mic_level = SettingsManager().get("microphone_level", 100)
+        mic_gain = mic_level / 100.0
+        mono = (mono.astype(np.float32) * mic_gain).astype(np.int16)
+
+        mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
+
+        if hasattr(self, "translated_audio_buffer") and self.translated_audio_buffer is not None:
+            translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
+            if translated.shape != mic_stereo.shape:
+                translated = np.zeros_like(mic_stereo, dtype=np.int16)
+        else:
+            translated = np.zeros_like(mic_stereo, dtype=np.int16)
+
+        settings = SettingsManager()
+        direct_volume = settings.get("direct_volume", 100)
+        translated_volume = settings.get("translated_volume", 100)
+        print(f"[MicMixer] direct={direct_volume}, translated={translated_volume}, mic_level={mic_level}")
+
+        mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
+        mixed = mixer.mix(mic_stereo, translated)
+
+        mixed_int32 = mixed.astype(np.int32) << 16
+        self.writer.feed_audio(mixed_int32.tobytes())
+
         rms = np.sqrt(np.mean(mono.astype(np.float64) ** 2))
         volume_threshold = 300
         MAX_RMS = 9000
@@ -57,16 +92,8 @@ class MicMonitorThread(QThread):
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
 
-        # Always push to virtual mic
-        if self.writer:
-            stereo_int32 = np.repeat(mono[:, np.newaxis], 2, axis=1).astype(np.int32) << 16
-            self.writer.feed_audio(stereo_int32.tobytes())
-
     def stop(self):
         self.running = False
-
-    def set_virtual_output_enabled(self, enabled: bool):
-        self.push_to_virtual = enabled
 
 # ==== IOCTL DEFINITIONS ====
 FILE_DEVICE_UNKNOWN = 0x00000022

@@ -22,22 +22,58 @@ class SpeakerMonitorThread(QThread):
         self.output_device_index = None
         self.playback_queue = queue.Queue()
         self.playback_thread = threading.Thread(target=self._playback_loop, daemon=True)
+        self.translated_audio_buffer = None
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
         if enabled:
-            print("[INFO] Enabling translation. Connecting WebSocket...")
             self.ws_client.connect()
+
+            def on_translated_audio(data_bytes):
+                arr = np.frombuffer(data_bytes, dtype=np.int16)
+                if arr.size % 2 != 0:
+                    arr = arr[:-1]
+                self.translated_audio_buffer = arr.reshape(-1, 2)
+
+            self.ws_client.register_audio_callback(on_translated_audio)
         else:
-            print("[INFO] Disabling translation. Disconnecting WebSocket...")
             self.ws_client.disconnect()
+            self.translated_audio_buffer = None
 
     def _playback_loop(self):
+        from core.audio_mixer import AudioMixer
+        from settings_manager import SettingsManager
+
         while self.running:
             try:
                 chunk = self.playback_queue.get(timeout=0.1)
-                if self.output_stream:
-                    self.output_stream.write(chunk)
+
+                audio = np.frombuffer(chunk, dtype=np.int16)
+                if len(audio) % 2 != 0:
+                    audio = audio[:-1]
+                audio = audio.reshape(-1, 2)
+
+                settings = SettingsManager()
+                direct_volume = settings.get("direct_volume", 100)
+                translated_volume = settings.get("translated_volume", 100)
+                speaker_level = settings.get("speaker_level", 100)
+                print(f"[SpeakerMixer] direct={direct_volume}, translated={translated_volume}, speaker={speaker_level}")
+
+                if self.translated_audio_buffer is not None:
+                    translated = self.translated_audio_buffer[:audio.shape[0]]
+                    if translated.shape != audio.shape:
+                        translated = np.zeros_like(audio, dtype=np.int16)
+                else:
+                    translated = np.zeros_like(audio, dtype=np.int16)
+
+                mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
+                mixed = mixer.mix(audio, translated)
+
+                mixed = mixed.astype(np.float32) * (speaker_level / 100.0)
+                mixed = np.clip(mixed, -32768, 32767).astype(np.int16)
+
+                self.output_stream.write(mixed.tobytes())
+
             except queue.Empty:
                 continue
             except Exception as e:

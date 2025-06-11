@@ -133,24 +133,18 @@ class Widget(QWidget):
             self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(True)
 
-            # Disable mic passthrough, only use translated audio
             if self.mic_thread:
                 self.mic_thread.set_virtual_output_enabled(False)
 
-            # Register callback to receive translated audio from socket
-            def on_translated_audio(data_bytes):
-                arr = np.frombuffer(data_bytes, dtype=np.int16)
-                if arr.size % 2 != 0:
-                    arr = arr[:-1]
-                self.speaker_thread.translated_audio_buffer = arr.reshape(-1, 2)
+                def on_translated_audio(data_bytes):
+                    if self.mic_thread:
+                        self.mic_thread.set_translated_audio(data_bytes)
 
-            self.speaker_thread.ws_client.register_audio_callback(on_translated_audio)
+                self.speaker_thread.ws_client.register_audio_callback(on_translated_audio)
 
-            # Enable translation (start sending speaker audio to socket)
             self.speaker_thread.set_translation_enabled(True)
 
         self.mic_on = not self.mic_on
-
 
     def restart_mic_thread(self):
         mic_device_name = self.settings_manager.get("microphone", "")
@@ -160,11 +154,16 @@ class Widget(QWidget):
             self.mic_thread.stop()
             self.mic_thread.wait()
 
-        self.mic_thread = MicMonitorThread(input_device_name=mic_device_name)
+        self.mic_thread = MicMonitorThread(
+            input_device_name=mic_device_name,
+            writer=self.virtual_writer,
+            push_to_virtual=True
+        )
         self.mic_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
         )
         self.mic_thread.start()
+
 
     def settings_dialog(self):
         dialog = SettingsDialog(self)
