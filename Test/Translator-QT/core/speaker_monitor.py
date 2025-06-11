@@ -16,13 +16,15 @@ class SpeakerMonitorThread(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.running = True
-        self.ws_client = WebSocketPCMClient(role="customer")
+        self.ws_client = WebSocketPCMClient(role="other")
         self.enable_translation = True
         self.output_stream = None
         self.output_device_index = None
         self.playback_queue = queue.Queue()
         self.playback_thread = threading.Thread(target=self._playback_loop, daemon=True)
         self.translated_audio_buffer = None
+        self.translation_playing = False
+        self.translated_audio_lock = threading.Lock()
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
@@ -30,6 +32,8 @@ class SpeakerMonitorThread(QThread):
             self.ws_client.connect()
 
             def on_translated_audio(data_bytes):
+                #print("[WebSocketPCMClient] other --- on_translated_audio")
+                return
                 arr = np.frombuffer(data_bytes, dtype=np.int16)
                 if arr.size % 2 != 0:
                     arr = arr[:-1]

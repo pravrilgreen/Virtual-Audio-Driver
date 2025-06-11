@@ -28,10 +28,10 @@ async def audio_socket(websocket: WebSocket):
             buffer += pcm_bytes
             last_header = header
 
-            print(f"[RECEIVE] {len(pcm_bytes)} bytes from {header.get('sender')}")
+            #print(f"[RECEIVE] {len(pcm_bytes)} bytes from {header.get('sender')}")
 
             # Process every ~2s of audio (stereo, 16-bit, 48kHz)
-            if len(buffer) > 48000 * 2 * 2:
+            if len(buffer) > 48000 * 2 * 4:
                 print(f"[PROCESS] {len(buffer)} bytes from {header.get('sender')}, starting dummy pipeline...")
                 response = process_audio_pipeline(buffer, last_header)
 

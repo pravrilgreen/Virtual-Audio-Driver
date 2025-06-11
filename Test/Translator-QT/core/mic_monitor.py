@@ -10,8 +10,8 @@ import win32con
 import pywintypes
 from core.audio_mixer import AudioMixer
 from settings_manager import SettingsManager
+from stts.stream_sender import WebSocketPCMClient
 
-# ==== MIC MONITOR THREAD ====
 class MicMonitorThread(QThread):
     volume_signal = Signal(int)
 
@@ -23,13 +23,28 @@ class MicMonitorThread(QThread):
         self.running = True
         self.stream = None
         self.translated_audio_buffer = None
+        self.buffer_lock = threading.Lock()
 
-    def set_translated_audio(self, pcm_bytes: bytes):
-        """Receive translated audio bytes from socket"""
-        arr = np.frombuffer(pcm_bytes, dtype=np.int16)
-        if arr.size % 2 != 0:
-            arr = arr[:-1]
-        self.translated_audio_buffer = arr.reshape(-1, 2)
+        self.ws_client = WebSocketPCMClient(role="user")
+
+    def set_translation_enabled(self, enabled: bool):
+        if enabled:
+            self.ws_client.connect()
+
+            def on_translated_audio(data_bytes):
+                #print("[WebSocketPCMClient] user --- on_translated_audio")
+                return
+                arr = np.frombuffer(data_bytes, dtype=np.int16)
+                if arr.size % 2 != 0:
+                    arr = arr[:-1]
+                with self.buffer_lock:
+                    self.translated_audio_buffer = arr.reshape(-1, 2)
+
+            self.ws_client.register_audio_callback(on_translated_audio)
+        else:
+            self.ws_client.disconnect()
+            with self.buffer_lock:
+                self.translated_audio_buffer = None
 
     def find_input_device(self, name):
         for i, dev in enumerate(sd.query_devices()):
@@ -67,12 +82,16 @@ class MicMonitorThread(QThread):
 
         mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
 
-        if hasattr(self, "translated_audio_buffer") and self.translated_audio_buffer is not None:
-            translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
-            if translated.shape != mic_stereo.shape:
+        if self.ws_client.connected:
+            self.ws_client.send_pcm_chunk(mic_stereo.astype(np.int16).tobytes())
+
+        with self.buffer_lock:
+            if self.translated_audio_buffer is not None:
+                translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
+                if translated.shape != mic_stereo.shape:
+                    translated = np.zeros_like(mic_stereo, dtype=np.int16)
+            else:
                 translated = np.zeros_like(mic_stereo, dtype=np.int16)
-        else:
-            translated = np.zeros_like(mic_stereo, dtype=np.int16)
 
         settings = SettingsManager()
         direct_volume = settings.get("direct_volume", 100)
@@ -84,6 +103,7 @@ class MicMonitorThread(QThread):
         mixed_int32 = mixed.astype(np.int32) << 16
         self.writer.feed_audio(mixed_int32.tobytes())
 
+        # TÍNH RMS
         rms = np.sqrt(np.mean(mono.astype(np.float64) ** 2))
         volume_threshold = 300
         MAX_RMS = 9000
@@ -93,6 +113,7 @@ class MicMonitorThread(QThread):
 
     def stop(self):
         self.running = False
+        self.ws_client.disconnect()
 
 # ==== IOCTL DEFINITIONS ====
 FILE_DEVICE_UNKNOWN = 0x00000022

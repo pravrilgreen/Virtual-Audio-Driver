@@ -7,12 +7,22 @@ import queue
 
 
 class WebSocketPCMClient:
-    def __init__(self, role="customer", url=None):
+    def __init__(self, role="other", url=None):
         self.role = role
         self.url = url or "ws://localhost:8000/ws/audio"
-        self.ws = None
+
+        self.ws_app = None
+        self.ws_thread = None
+        self.sender_thread = None
+
         self.connected = False
+        self.running = False
+        self.manual_stop = False
+        self.stop_event = threading.Event()
         self.lock = threading.Lock()
+
+        self.send_queue = queue.Queue(maxsize=100)
+        self.audio_callback = None
 
         self.src_lang = "ja"
         self.tgt_lang = "vi"
@@ -20,51 +30,79 @@ class WebSocketPCMClient:
         self.channels = 2
         self.sample_width = 2
 
-        self.send_queue = queue.Queue()
-        self.receiver_thread = None
-        self.sender_thread = None
-        self.running = False
-        self.reconnect_lock = threading.Lock()
+    # ===============================
+    # WebSocketApp Callbacks
+    # ===============================
+    def _on_open(self, ws):
+        print(f"[WebSocketPCMClient] Connected to {self.url} (role: {self.role})")
+        self.connected = True
+        self.running = True
 
+    def _on_close(self, ws, code, msg):
+        print(f"[WebSocketPCMClient] Disconnected (code={code}, msg={msg})")
+        self.connected = False
+        self.running = False
+        if not self.manual_stop:
+            self._schedule_reconnect()
+
+    def _on_error(self, ws, error):
+        print("[WebSocketPCMClient] Error:", error)
+
+    def _on_message(self, ws, message):
+        if isinstance(message, bytes) and self.audio_callback:
+            self.audio_callback(message)
+
+    # ===============================
+    # Connection Management
+    # ===============================
     def connect(self):
-        if self.connected or self.running:
+        if self.running:
             return
 
-        def _connect_thread():
-            with self.reconnect_lock:
-                try:
-                    self.ws = websocket.WebSocket()
-                    self.ws.connect(self.url)
-                    self.connected = True
-                    self.running = True
-                    print(f"[WebSocketPCMClient] Connected to {self.url}")
+        self.manual_stop = False
+        self.stop_event.clear()
 
-                    self.sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
-                    self.receiver_thread = threading.Thread(target=self._receiver_loop, daemon=True)
-                    self.sender_thread.start()
-                    self.receiver_thread.start()
-                except Exception as e:
-                    self.connected = False
-                    self.running = False
-                    print(f"[WebSocketPCMClient] Connection failed: {e}")
+        self.ws_app = websocket.WebSocketApp(
+            self.url,
+            on_open=self._on_open,
+            on_close=self._on_close,
+            on_error=self._on_error,
+            on_message=self._on_message
+        )
 
-        threading.Thread(target=_connect_thread, daemon=True).start()
+        def run_ws():
+            while not self.manual_stop:
+                self.ws_app.run_forever()
+                if not self.manual_stop:
+                    print("[WebSocketPCMClient] Reconnecting in 2 seconds...")
+                    time.sleep(2)
+
+        self.ws_thread = threading.Thread(target=run_ws, daemon=True)
+        self.ws_thread.start()
+
+        self.sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
+        self.sender_thread.start()
 
     def disconnect(self):
+        self.manual_stop = True
         self.running = False
-        with self.lock:
-            try:
-                if self.ws:
-                    self.ws.close()
-                    print("[WebSocketPCMClient] Connection closed.")
-            except Exception as e:
-                print(f"[WebSocketPCMClient] Error on disconnect: {e}")
-            finally:
-                self.ws = None
-                self.connected = False
+        self.stop_event.set()
+        try:
+            if self.ws_app:
+                self.ws_app.close()
+        except Exception as e:
+            print("[WebSocketPCMClient] Error during disconnect:", e)
 
+    def _schedule_reconnect(self):
+        print("[WebSocketPCMClient] Scheduling reconnect...")
+        time.sleep(2)
+        self.connect()
+
+    # ===============================
+    # PCM Sending
+    # ===============================
     def send_pcm_chunk(self, pcm_bytes: bytes):
-        if not self.connected or not self.running or not self.ws:
+        if not self.connected or not self.running or not self.ws_app:
             return
         try:
             self.send_queue.put_nowait(pcm_bytes)
@@ -72,7 +110,7 @@ class WebSocketPCMClient:
             print("[WebSocketPCMClient] Send queue full. Dropping chunk.")
 
     def _sender_loop(self):
-        while self.running and self.connected:
+        while not self.stop_event.is_set():
             try:
                 pcm_bytes = self.send_queue.get(timeout=1)
 
@@ -91,49 +129,16 @@ class WebSocketPCMClient:
                 header_len = struct.pack("!I", len(header_bytes))
                 message = header_len + header_bytes + pcm_bytes
 
-                with self.lock:
-                    if self.ws and self.connected:
-                        self.ws.send_binary(message)
-                    else:
-                        print("[WebSocketPCMClient] Cannot send: WebSocket is not connected.")
-
-                print(f"[SEND] {len(pcm_bytes)} bytes sent for role: {self.role}")
-
+                if self.connected and self.ws_app:
+                    self.ws_app.send(message, opcode=websocket.ABNF.OPCODE_BINARY)
+                    #print(f"[SEND] {len(pcm_bytes)} bytes sent for role: {self.role}")
             except queue.Empty:
                 continue
             except Exception as e:
                 print("[WebSocketPCMClient] Send failed:", e)
-                self.connected = False
-                self._attempt_reconnect()
 
-    def _receiver_loop(self):
-        while self.running and self.connected:
-            try:
-                msg = self.ws.recv()
-                # Optionally: handle response from server
-            except Exception as e:
-                print("[WS RECEIVER ERROR]", e)
-                self.connected = False
-                self._attempt_reconnect()
-
-    def _attempt_reconnect(self):
-        if not self.running:
-            return
-        print("[WebSocketPCMClient] Attempting to reconnect...")
-        self.disconnect()
-        time.sleep(1.5)
-        self.connect()
-
+    # ===============================
+    # Callback Registration
+    # ===============================
     def register_audio_callback(self, callback_fn):
         self.audio_callback = callback_fn
-
-    def _receiver_loop(self):
-        while self.running and self.connected:
-            try:
-                msg = self.ws.recv()
-                if isinstance(msg, bytes) and self.audio_callback:
-                    self.audio_callback(msg)
-            except Exception as e:
-                print("[WS RECEIVER ERROR]", e)
-                self.connected = False
-                self._attempt_reconnect()

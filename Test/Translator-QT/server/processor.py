@@ -14,10 +14,10 @@ def process_audio_pipeline(pcm_bytes: bytes, header: dict) -> dict:
     translated = translate_text(text, src_lang, tgt_lang)
 
     # 3. TTS (dummy)
-    wav_b64 = text_to_speech(translated)
+    #wav_b64 = text_to_speech(translated)
 
     return {
         "role": role,
         "text": translated,
-        "tts_audio": wav_b64
+        "tts_audio": None
     }

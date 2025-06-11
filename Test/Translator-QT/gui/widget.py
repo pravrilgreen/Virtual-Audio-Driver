@@ -107,39 +107,30 @@ class Widget(QWidget):
 
     def toggle_mic(self):
         if self.mic_on:
-            # === Disable live translation ===
             print("Live Translate: OFF")
             self.ui.buttonMicToggle.setText("Live Translate: OFF")
             self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(False)
 
-            # Stop translated audio playback (if any)
             if self.pcm_thread:
                 self.pcm_thread.stop()
                 self.pcm_thread.join()
                 self.pcm_thread = None
 
-            # Disable translation (stop sending speaker audio to socket)
             self.speaker_thread.set_translation_enabled(False)
+            self.mic_thread.set_translation_enabled(False) 
 
         else:
-            # === Enable live translation ===
             print("Live Translate: ON")
             self.ui.buttonMicToggle.setText("Live Translate: ON")
             self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(True)
 
-            if self.mic_thread:
-
-                def on_translated_audio(data_bytes):
-                    if self.mic_thread:
-                        self.mic_thread.set_translated_audio(data_bytes)
-
-                self.speaker_thread.ws_client.register_audio_callback(on_translated_audio)
-
             self.speaker_thread.set_translation_enabled(True)
+            self.mic_thread.set_translation_enabled(True)
 
         self.mic_on = not self.mic_on
+
 
     def restart_mic_thread(self):
         mic_device_name = self.settings_manager.get("microphone", "")
