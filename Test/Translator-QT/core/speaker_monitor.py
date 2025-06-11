@@ -6,7 +6,6 @@ import math
 import sounddevice as sd
 from stts.stream_sender import WebSocketPCMClient
 
-
 class SpeakerMonitorThread(QThread):
     volume_signal = Signal(int)
     fft_signal = Signal(list)
@@ -15,21 +14,19 @@ class SpeakerMonitorThread(QThread):
         super().__init__(parent)
         self.running = True
         self.ws_client = WebSocketPCMClient(role="customer")
-        self.enable_translation = True  # Mặc định: bật dịch
+        self.enable_translation = True
         self.output_stream = None
-        self.output_device_index = None  # Optional: chọn device theo settings
+        self.output_device_index = None
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
-        if not enabled:
-            # Khi tắt dịch, sẽ phát local → output_stream sẽ được mở trong vòng lặp
-            if self.output_stream is not None:
-                try:
-                    self.output_stream.stop()
-                    self.output_stream.close()
-                except Exception as e:
-                    print("[SpeakerMonitor] Error closing output stream:", e)
-                self.output_stream = None
+
+        if enabled:
+            print("[INFO] Enabling translation. Connecting WebSocket...")
+            self.ws_client.connect()
+        else:
+            print("[INFO] Disabling translation. Disconnecting WebSocket...")
+            self.ws_client.disconnect()
 
     def run(self):
         GENERIC_READ = 0x80000000
@@ -69,17 +66,24 @@ class SpeakerMonitorThread(QThread):
             return
 
         print("[INFO] SpeakerMonitorThread started.")
-        self.ws_client.connect()
+
+        # Mở output stream ngay khi bắt đầu
+        try:
+            self.output_stream = sd.RawOutputStream(
+                samplerate=SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype='int16',
+                device=self.output_device_index or None,
+                blocksize=READ_SIZE // (2 * CHANNELS)
+            )
+            self.output_stream.start()
+        except Exception as e:
+            print("[ERROR] Failed to open output stream:", e)
+            CloseHandle(handle)
+            return
 
         try:
             while self.running:
-                # Auto reconnect WebSocket
-                if self.enable_translation and not self.ws_client.connected:
-                    print("[WARN] WebSocket disconnected, trying to reconnect...")
-                    self.ws_client.connect()
-                    time.sleep(1)
-                    continue
-
                 buffer = ctypes.create_string_buffer(READ_SIZE)
                 bytes_returned = ctypes.c_ulong(0)
 
@@ -129,51 +133,30 @@ class SpeakerMonitorThread(QThread):
                 fft_magnitude = np.abs(fft)
                 fft_magnitude /= (np.max(fft_magnitude) + 1e-6)
                 self.fft_signal.emit(fft_magnitude[:64].tolist())
-
-                # === Translation logic ===
-                if self.enable_translation:
+        
+                # Routing logic
+                if self.enable_translation and self.ws_client.connected:
                     self.ws_client.send_pcm_chunk(raw)
                 else:
-                    # === Local playback ===
-                    if self.output_stream is None:
-                        try:
-                            self.output_stream = sd.RawOutputStream(
-                                samplerate=SAMPLE_RATE,
-                                channels=CHANNELS,
-                                dtype='int16',
-                                device=self.output_device_index or None,
-                                blocksize=None
-                            )
-                            self.output_stream.start()
-                            print("[SpeakerMonitor] Opened local output stream.")
-                        except Exception as e:
-                            print("[SpeakerMonitor] Failed to open output stream:", e)
-                            self.output_stream = None
-
-                    if self.output_stream:
-                        try:
-                            self.output_stream.write(raw)
-                        except Exception as e:
-                            print("[SpeakerMonitor] Error writing to output stream:", e)
-                            try:
-                                self.output_stream.stop()
-                                self.output_stream.close()
-                            except:
-                                pass
-                            self.output_stream = None
+                    try:
+                        self.output_stream.write(raw)
+                    except Exception as e:
+                        print("[WARN] Audio playback failed:", e)
 
         except Exception as e:
             print("[ERROR] SpeakerMonitorThread exception:", e)
 
         finally:
-            CloseHandle(handle)
-            self.ws_client.disconnect()
             if self.output_stream:
                 try:
                     self.output_stream.stop()
                     self.output_stream.close()
-                except:
-                    pass
+                except Exception as e:
+                    print("[WARN] Cleanup output stream failed:", e)
+                self.output_stream = None
+
+            self.ws_client.disconnect()
+            CloseHandle(handle)
             print("[INFO] SpeakerMonitorThread stopped.")
 
     def stop(self):

@@ -52,7 +52,7 @@ class Widget(QWidget):
 
         self.virtual_writer = VirtualMicWriter()
         self.virtual_writer.start()
-
+        
         self.speaker_thread = SpeakerMonitorThread()
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
@@ -87,7 +87,7 @@ class Widget(QWidget):
         self.mic_thread = MicMonitorThread(
             input_device_name=mic_device_name,
             writer=self.virtual_writer,
-            push_to_virtual=not self.mic_on  # If Translate OFF, enable passthrough
+            push_to_virtual=True
         )
         self.mic_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
@@ -97,38 +97,46 @@ class Widget(QWidget):
 
     def toggle_mic(self):
         if self.mic_on:
-            # Turning OFF Live Translate
+            # === Disable live translation ===
             print("Live Translate: OFF")
             self.ui.buttonMicToggle.setText("Live Translate: OFF")
             self.ui.buttonMicToggle.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(False)
 
+            # Stop translated audio playback (if any)
             if self.pcm_thread:
                 self.pcm_thread.stop()
+                self.pcm_thread.join()
                 self.pcm_thread = None
 
+            # Enable direct mic passthrough to virtual mic
             if self.mic_thread:
                 self.mic_thread.set_virtual_output_enabled(True)
 
+            # Disable translation (stop sending speaker audio to socket)
             self.speaker_thread.set_translation_enabled(False)
 
         else:
-            # Turning ON Live Translate
+            # === Enable live translation ===
             print("Live Translate: ON")
             self.ui.buttonMicToggle.setText("Live Translate: ON")
             self.ui.buttonMicToggle.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             self.ui.labelMic.setEnabled(True)
 
+            # Disable mic passthrough, only use translated audio
             if self.mic_thread:
                 self.mic_thread.set_virtual_output_enabled(False)
 
-            try:
-                pcm_data = wav_to_pcm_bytes("assets/audio/sample.wav")
-                self.pcm_thread = PCMPlayerThread(pcm_data, self.virtual_writer)
-                self.pcm_thread.start()
-            except Exception as e:
-                print(f"[-] Failed to convert/playback: {e}")
+            # Register callback to receive translated audio from socket
+            def on_translated_audio(data_bytes):
+                arr = np.frombuffer(data_bytes, dtype=np.int16)
+                if arr.size % 2 != 0:
+                    arr = arr[:-1]
+                self.speaker_thread.translated_audio_buffer = arr.reshape(-1, 2)
 
+            self.speaker_thread.ws_client.register_audio_callback(on_translated_audio)
+
+            # Enable translation (start sending speaker audio to socket)
             self.speaker_thread.set_translation_enabled(True)
 
         self.mic_on = not self.mic_on

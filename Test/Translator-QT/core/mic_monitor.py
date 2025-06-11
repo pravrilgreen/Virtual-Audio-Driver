@@ -19,6 +19,7 @@ class MicMonitorThread(QThread):
         self.writer = writer
         self.push_to_virtual = push_to_virtual
         self.running = True
+        self.stream = None
 
     def find_input_device(self, name):
         for i, dev in enumerate(sd.query_devices()):
@@ -56,8 +57,8 @@ class MicMonitorThread(QThread):
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
 
-        if self.push_to_virtual and self.writer:
-            # Convert mono int16 → stereo int32 PCM
+        # Always push to virtual mic
+        if self.writer:
             stereo_int32 = np.repeat(mono[:, np.newaxis], 2, axis=1).astype(np.int32) << 16
             self.writer.feed_audio(stereo_int32.tobytes())
 
@@ -67,7 +68,6 @@ class MicMonitorThread(QThread):
     def set_virtual_output_enabled(self, enabled: bool):
         self.push_to_virtual = enabled
 
-
 # ==== IOCTL DEFINITIONS ====
 FILE_DEVICE_UNKNOWN = 0x00000022
 METHOD_BUFFERED = 0
@@ -75,18 +75,20 @@ FILE_WRITE_DATA = 0x00000002
 IOCTL_INDEX = 0x800
 DEVICE_NAME = r"\\.\VirtualAudio"
 CHUNK_SIZE = 4096
+DESIRED_SAMPLE_RATE = 48000
+DESIRED_CHANNELS = 2
+DESIRED_BIT_DEPTH = 32
 
 def ctl_code(device_type, function, method, access):
     return ((device_type << 16) | (access << 14) | (function << 2) | method)
 
 IOCTL_VIRTUALAUDIO_WRITE = ctl_code(FILE_DEVICE_UNKNOWN, IOCTL_INDEX, METHOD_BUFFERED, FILE_WRITE_DATA)
 
-
 # ==== VIRTUAL MIC WRITER ====
 class VirtualMicWriter(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
-        self.audio_queue = queue.Queue(maxsize=100)
+        self.audio_queue = queue.Queue()
         self.running = True
         self.handle = self.open_driver()
 
@@ -108,12 +110,10 @@ class VirtualMicWriter(threading.Thread):
             return None
 
     def feed_audio(self, pcm_bytes: bytes):
+        """Feed raw PCM bytes to the driver. Will be split into chunks internally."""
         if not isinstance(pcm_bytes, bytes):
             raise ValueError("Audio data must be bytes.")
-        try:
-            self.audio_queue.put_nowait(pcm_bytes)
-        except queue.Full:
-            print("[!] Audio queue full, dropping chunk.")
+        self.audio_queue.put(pcm_bytes)
 
     def run(self):
         if not self.handle:
@@ -134,7 +134,7 @@ class VirtualMicWriter(threading.Thread):
                         self.handle,
                         IOCTL_VIRTUALAUDIO_WRITE,
                         chunk,
-                        None
+                        None  # No output buffer
                     )
                 except pywintypes.error as e:
                     print(f"[!] IOCTL error: {e}")
@@ -145,10 +145,7 @@ class VirtualMicWriter(threading.Thread):
 
     def stop(self):
         self.running = False
-        self.audio_queue.put(b"")  # Unblock queue if waiting
 
-
-# ==== PCM PLAYER THREAD ====
 class PCMPlayerThread(threading.Thread):
     def __init__(self, pcm_bytes: bytes, writer: VirtualMicWriter):
         super().__init__(daemon=True)
@@ -164,7 +161,7 @@ class PCMPlayerThread(threading.Thread):
         CHUNK_SIZE = 4096
         SAMPLE_RATE = 48000
         CHANNELS = 2
-        BYTES_PER_SAMPLE = 4
+        BYTES_PER_SAMPLE = 4  # int32
 
         bytes_per_frame = CHANNELS * BYTES_PER_SAMPLE
         frames_per_chunk = CHUNK_SIZE // bytes_per_frame
@@ -191,48 +188,6 @@ class PCMPlayerThread(threading.Thread):
                 time.sleep(sleep_time)
 
         print("[PCM] Playback finished.")
-
-    def stop(self):
-        self.running = False
-
-
-# ==== VIRTUAL MIC KEEP ALIVE ====
-class VirtualMicKeepAlive(threading.Thread):
-    def __init__(self, device_name):
-        super().__init__(daemon=True)
-        self.running = True
-        self.device_name = device_name
-
-    def find_device_index(self):
-        devices = sd.query_devices()
-        for i, dev in enumerate(devices):
-            if self.device_name.lower() in dev['name'].lower() and dev['max_input_channels'] > 0:
-                return i
-        return None
-
-    def run(self):
-        device_index = self.find_device_index()
-        if device_index is None:
-            print(f"[!] Cannot find virtual mic device: {self.device_name}")
-            return
-
-        def callback(indata, frames, time, status):
-            pass
-
-        try:
-            with sd.InputStream(
-                samplerate=48000,
-                channels=2,
-                dtype='int32',
-                blocksize=1024,
-                callback=callback,
-                device=device_index
-            ):
-                print("[+] Virtual mic keep-alive started.")
-                while self.running:
-                    sd.sleep(500)
-        except Exception as e:
-            print(f"[!] VirtualMicKeepAlive error: {e}")
 
     def stop(self):
         self.running = False
