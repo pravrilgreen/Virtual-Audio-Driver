@@ -1,6 +1,17 @@
 {
     "files": [
-        "widget.py",
-        "form.ui"
+        "main.py",
+        "gui/widget.py",
+        "gui/form.ui",
+        "gui/ui_form.py",
+        "gui/settings_dialog.py",
+        "gui/resources.qrc",
+        "core/mic_monitor.py",
+        "core/speaker_monitor.py",
+        "core/virtual_audio.py",
+        "core/audio_utils.py",
+        "devices/audio_devices.py",
+        "stts/stream_sender.py",
+        "settings_manager.py"
     ]
 }

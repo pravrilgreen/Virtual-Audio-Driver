@@ -95,7 +95,6 @@ def send_wav_to_virtual_driver(wav_path):
                     continue
                 else:
                     print(f"[!] IOCTL error: {e}")
-                    break
 
             offset += len(chunk)
             chunk_index += 1

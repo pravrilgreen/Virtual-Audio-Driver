@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC>
+    <qresource prefix="/">
+        <file>../assets/images/avatar.png</file>
+        <file>../assets/images/jp.png</file>
+        <file>../assets/images/vn.png</file>
+        <file>../assets/images/uk.png</file>
+        <file>../assets/images/settings.png</file>
+        <file>../assets/images/micro.png</file>
+        <file>../assets/images/micro_1.png</file>
+    </qresource>
+</RCC>

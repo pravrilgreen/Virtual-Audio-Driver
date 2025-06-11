@@ -6,10 +6,10 @@ SETTINGS_PATH = "config/settings.json"
 DEFAULT_SETTINGS = {
     "microphone": "",
     "speaker": "",
-    "microphone_level": 100,
-    "speaker_level": 100,
-    "direct_volume": 70,
-    "translated_volume": 70,
+    "microphone_level": 80,
+    "speaker_level": 80,
+    "direct_volume": 50,
+    "translated_volume": 100,
     "llm_model": "Gemma",
     "api_url": "",
     "api_token": ""
