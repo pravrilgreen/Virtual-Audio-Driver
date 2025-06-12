@@ -1,4 +1,4 @@
-import webrtcvad
+import webrtcvad  # type: ignore
 import numpy as np
 import os
 import time
@@ -6,12 +6,13 @@ import threading
 import queue
 import json
 import struct
-import resampy
+import resampy  # type: ignore
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, APIRouter
 import asyncio
-from pydub import AudioSegment
-from pydub.effects import low_pass_filter
+from pydub import AudioSegment  # type: ignore
+from pydub.effects import low_pass_filter  # type: ignore
 import whisper
+from starlette.websockets import WebSocketState
 
 app = FastAPI()
 router = APIRouter()
@@ -24,20 +25,21 @@ FRAME_DURATION = 20
 FRAME_BYTES = int(WS_SAMPLE_RATE * FRAME_DURATION / 1000) * CHANNELS * BYTES_PER_SAMPLE
 PING_INTERVAL = 2
 BLOCKED_KEYWORDS = [
-        "Hãy subscribe cho kênh",
-        "Ghiền Mì Gõ", 
-        "Cảm ơn các bạn.",
-        "Hẹn gặp lại ở video tiếp theo",
-    ]
-        
-
+    "Hãy subscribe cho kênh",
+    "Ghiền Mì Gõ",
+    "Cảm ơn các bạn.",
+    "Hẹn gặp lại ở video tiếp theo",
+]
 
 whisper_model = whisper.load_model("medium").to("cuda")
 
+
 class AudioBuffer:
-    def __init__(self, role, vad):
+    def __init__(self, role, vad, message_queue, loop):
         self.role = role
         self.vad = vad
+        self.loop = loop
+        self.message_queue = message_queue
         self.frames = []
         self.raw_frames = []
         self.speaking = False
@@ -98,7 +100,6 @@ class AudioBuffer:
         audio_16k = resampy.resample(mono, WS_SAMPLE_RATE, 16000)
 
         if len(audio_16k) < 16000:
-            #print(f"[WHISPER] Skipped: too short ({len(audio_16k)} samples)")
             return
 
         try:
@@ -108,7 +109,16 @@ class AudioBuffer:
             if any(keyword.lower() in text.lower() for keyword in BLOCKED_KEYWORDS) or not text:
                 return
 
-            print(f"[WHISPER] Role: {self.role} | Language: {self.src_lang} | Text: {result['text']}")
+            print(f"[WHISPER] Role: {self.role} | Language: {self.src_lang} | Text: {text}")
+
+            message = {
+                "sender": self.role,
+                "text": text
+            }
+
+            # Push message to main loop's queue
+            print(f"[QUEUE PUSH] Role: {self.role} | Pushing message: {text}")
+            self.loop.call_soon_threadsafe(self.message_queue.put_nowait, message)
 
         except Exception as e:
             print(f"[ERROR] Whisper failed: {e}")
@@ -141,10 +151,9 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
     frame_accum_other = b""
     recv_buffer = b""
 
-    # Track the last known language settings per role
     prev_langs = {
-        "user": {"src": "vi", "tgt": "transcript"},   # Default: Vietnamese
-        "other": {"src": "ja", "tgt": "transcript"}   # Default: Japanese
+        "user": {"src": "vi", "tgt": "transcript"},
+        "other": {"src": "ja", "tgt": "transcript"}
     }
 
     while True:
@@ -153,12 +162,10 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
             recv_buffer += chunk
 
             while len(recv_buffer) >= 4:
-                # Read header length (first 4 bytes)
                 header_len = struct.unpack("!I", recv_buffer[:4])[0]
                 if len(recv_buffer) < 4 + header_len:
-                    break  # Wait for more data
+                    break
 
-                # Parse header JSON
                 header_bytes = recv_buffer[4:4 + header_len]
                 try:
                     header = json.loads(header_bytes.decode("utf-8"))
@@ -168,10 +175,8 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
                         recv_buffer = recv_buffer[4 + header_len:]
                         continue
 
-                    # Extract language from header, fallback to previous
                     new_src = header.get("src_lang", prev_langs[role]["src"])
                     new_tgt = header.get("tgt_lang", prev_langs[role]["tgt"])
-                    # Only update language if there's a change
                     if new_src != prev_langs[role]["src"] or new_tgt != prev_langs[role]["tgt"]:
                         print(f"[LANGUAGE CHANGE] Role: {role} Source: {new_src}, Target: {new_tgt}")
                         prev_langs[role]["src"] = new_src
@@ -187,22 +192,14 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
                     recv_buffer = recv_buffer[4 + header_len:]
                     continue
 
-                except:
-                    # Skip malformed header and continue
-                    recv_buffer = recv_buffer[4 + header_len:]
-                    continue
-
-                # Extract the remaining audio payload
                 full_len = 4 + header_len
                 remaining = recv_buffer[full_len:]
                 recv_buffer = b""
 
-                # Align PCM bytes to full audio frames
                 sample_align = CHANNELS * BYTES_PER_SAMPLE
                 valid_len = len(remaining) - (len(remaining) % sample_align)
                 pcm_bytes = remaining[:valid_len]
 
-                # Accumulate and process audio frames by role
                 if role == "user":
                     frame_accum_user += pcm_bytes
                     while len(frame_accum_user) >= FRAME_BYTES:
@@ -223,6 +220,7 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
             print("[WebSocket Error]:", e)
             break
 
+
 @router.websocket("/ws/audio")
 async def audio_socket(websocket: WebSocket):
     await websocket.accept()
@@ -230,20 +228,37 @@ async def audio_socket(websocket: WebSocket):
     vad_user = webrtcvad.Vad(1)
     vad_other = webrtcvad.Vad(1)
 
-    buffer_user = AudioBuffer("user", vad_user)
+    loop = asyncio.get_running_loop()
+    message_queue = asyncio.Queue()
+
+    buffer_user = AudioBuffer("user", vad_user, message_queue, loop)
     buffer_user.src_lang = "vi"
-    buffer_other = AudioBuffer("other", vad_other)
-    buffer_other.src_lang = "jp"
+    buffer_other = AudioBuffer("other", vad_other, message_queue, loop)
+    buffer_other.src_lang = "ja"
 
     async def heartbeat():
         while True:
             await asyncio.sleep(PING_INTERVAL)
             try:
                 await websocket.send_text("ping")
-            except:
+            except Exception as e:
+                print(f"[HEARTBEAT ERROR] WebSocket closed: {e}")
                 break
 
+    async def message_sender():
+        while True:
+            message = await message_queue.get()
+            print(f"[QUEUE] Got message from role: {message['sender']} | Text: {message['text']}")
+            try:
+                await websocket.send_json(message)
+                print(f"[SEND SUCCESS] Sent to client: {message}")
+            except Exception as e:
+                print(f"[SEND ERROR] {e}")
+                break
+
+
     heartbeat_task = asyncio.create_task(heartbeat())
+    sender_task = asyncio.create_task(message_sender())
 
     try:
         await process_audio_stream(websocket, buffer_user, buffer_other)
@@ -251,6 +266,7 @@ async def audio_socket(websocket: WebSocket):
         pass
     finally:
         heartbeat_task.cancel()
+        sender_task.cancel()
 
 
 app.include_router(router)

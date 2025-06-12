@@ -10,7 +10,8 @@ import soundfile as sf
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
 from PySide6.QtGui import QColor
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer
+from PySide6.QtGui import QTextCursor
 
 from gui.ui_form import Ui_Widget
 import gui.rc_resources
@@ -20,6 +21,7 @@ from gui.settings_dialog import SettingsDialog
 from settings_manager import SettingsManager
 from core.virtual_audio import VirtualSpeakerKeepAlive, VirtualMicKeepAlive
 from devices.audio_devices import find_output_device_index_by_name
+
 
 def wav_to_pcm_bytes(wav_path: str) -> bytes:
     data, sr = sf.read(wav_path, always_2d=True)
@@ -67,6 +69,7 @@ class Widget(QWidget):
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
         )
+        self.speaker_thread.ws_client.register_transcript_callback(self.handle_transcript)
         self.speaker_thread.start()
 
         # === Mic Monitor Thread ===
@@ -108,6 +111,8 @@ class Widget(QWidget):
         self.mic_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelMeAvatar, vol)
         )
+
+        self.mic_thread.ws_client.register_transcript_callback(self.handle_transcript)
         self.mic_thread.start()
 
 
@@ -197,6 +202,7 @@ class Widget(QWidget):
         self.speaker_thread.volume_signal.connect(
             lambda vol: self.update_sound_effect(self.ui.labelCustomerAvatar, vol)
         )
+
         self.speaker_thread.start()
 
     def new_conversation(self):
@@ -276,6 +282,26 @@ class Widget(QWidget):
             return "vi"
         return "vi"
 
+    def handle_transcript(self, data):
+        role = data.get("sender", "unknown").capitalize()
+        text = data.get("text", "").strip()
+        if not text:
+            return
+
+        if role.lower() == "user":
+            color = "#2e86de"
+        elif role.lower() == "other":
+            color = "#16a085"
+        else:
+            color = "#555555"
+
+        print("[handle_transcript] for", role)
+
+        html_line = f'<span style="color:{color}; font-weight: bold;">{role}:</span> <span style="color:black;">{text}</span>'
+        self.ui.textChatBox.moveCursor(QTextCursor.End)
+        self.ui.textChatBox.insertHtml(html_line + "<br>")
+
+        
     def closeEvent(self, event):
         self.speaker_thread.stop()
         self.speaker_thread.wait()

@@ -136,12 +136,32 @@ class WebSocketPCMClient:
         while self.running and not self.stop_event.is_set():
             try:
                 msg = self.ws.recv()
+
                 if isinstance(msg, str):
-                    if msg.strip().lower() == "ping":
-                        #print("[server] ping")
-                        continue
-                elif isinstance(msg, bytes) and self.audio_callback:
-                    self.audio_callback(msg)
+                    try:
+                        data = json.loads(msg)
+
+                        if "text" in data:
+                            sender = data.get("sender", "unknown")
+                            print(f"[TRANSCRIPT] From {sender.upper()}")
+
+                            if self.transcript_callback:
+                                try:
+                                    self.transcript_callback(data)
+                                    print(f"[TRANSCRIPT] transcript_callback {sender.upper()}")
+                                except Exception as e:
+                                    print(f"[CALLBACK ERROR] {e}")         
+
+                    except json.JSONDecodeError:
+                        if msg.strip().lower() == "ping":
+                            continue
+                        else:
+                            print("[WS WARNING] Received unparseable string:", msg)
+
+                elif isinstance(msg, bytes):
+                    if self.audio_callback:
+                        self.audio_callback(msg)
+
             except Exception as e:
                 print("[WS RECEIVER ERROR]", e)
                 self.disconnect(auto_reconnect=True)
