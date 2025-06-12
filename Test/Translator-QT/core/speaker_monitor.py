@@ -7,13 +7,15 @@ import sounddevice as sd
 from stts.stream_sender import WebSocketPCMClient
 import queue
 import threading
+import json
+import struct
 from scipy.signal import resample_poly
 
 class SpeakerMonitorThread(QThread):
     volume_signal = Signal(int)
     fft_signal = Signal(list)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, lang_combo=None):
         super().__init__(parent)
         self.running = True
         self.ws_client = WebSocketPCMClient(role="other")
@@ -25,6 +27,7 @@ class SpeakerMonitorThread(QThread):
         self.translated_audio_buffer = None
         self.translation_playing = False
         self.translated_audio_lock = threading.Lock()
+        self.lang_combo = lang_combo
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
@@ -40,6 +43,10 @@ class SpeakerMonitorThread(QThread):
                 self.translated_audio_buffer = arr.reshape(-1, 2)
 
             self.ws_client.register_audio_callback(on_translated_audio)
+            if self.lang_combo:
+                text = self.lang_combo.currentText()
+                lang = self.get_lang_code(text)
+                self.update_language(src_lang=lang)
         else:
             self.ws_client.disconnect()
             self.translated_audio_buffer = None

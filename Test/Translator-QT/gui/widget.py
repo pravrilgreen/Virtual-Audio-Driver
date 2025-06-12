@@ -3,6 +3,8 @@ import math
 import numpy as np
 import time
 import threading
+import json
+import struct
 import librosa
 import soundfile as sf
 
@@ -70,6 +72,10 @@ class Widget(QWidget):
         # === Mic Monitor Thread ===
         self.start_initial_mic_thread()
 
+        # === Language change ===
+        self.ui.comboMyLang.currentIndexChanged.connect(self.on_my_lang_changed)
+        self.ui.comboCustomerLang.currentIndexChanged.connect(self.on_customer_lang_changed)
+        self.update_ws_languages()
 
     def setupUi(self):
         self.ui.setupUi(self)
@@ -244,6 +250,31 @@ class Widget(QWidget):
             return QColor(255, 165, 0)
         else:
             return QColor(255, 0, 0)
+        
+    
+    def on_my_lang_changed(self, index):
+        self.update_ws_languages()
+
+    def on_customer_lang_changed(self, index):
+        self.update_ws_languages()
+
+    def update_ws_languages(self):
+        my_lang = self.get_lang_code(self.ui.comboMyLang.currentText())
+        customer_lang = self.get_lang_code(self.ui.comboCustomerLang.currentText())
+
+        if self.mic_thread:
+            self.mic_thread.ws_client.update_language(my_lang, customer_lang)
+        if self.speaker_thread:
+            self.speaker_thread.ws_client.update_language(customer_lang, my_lang)
+            
+    def get_lang_code(self, text):
+        if "Japanese" in text:
+            return "ja"
+        elif "English" in text:
+            return "en"
+        elif "Vietnamese" in text:
+            return "vi"
+        return "vi"
 
     def closeEvent(self, event):
         self.speaker_thread.stop()

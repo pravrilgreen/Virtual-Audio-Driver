@@ -2,6 +2,8 @@ from PySide6.QtCore import QThread, Signal
 import numpy as np
 import sounddevice as sd
 import math
+import json
+import struct
 import threading
 import queue
 import time
@@ -14,8 +16,7 @@ from stts.stream_sender import WebSocketPCMClient
 
 class MicMonitorThread(QThread):
     volume_signal = Signal(int)
-
-    def __init__(self, input_device_name=None, writer: "VirtualMicWriter" = None, push_to_virtual=False, parent=None):
+    def __init__(self, input_device_name=None, writer: "VirtualMicWriter" = None, push_to_virtual=False, lang_combo=None, parent=None):
         super().__init__(parent)
         self.input_device_name = input_device_name
         self.writer = writer
@@ -24,8 +25,8 @@ class MicMonitorThread(QThread):
         self.stream = None
         self.translated_audio_buffer = None
         self.buffer_lock = threading.Lock()
-
         self.ws_client = WebSocketPCMClient(role="user")
+        self.lang_combo = lang_combo
 
     def set_translation_enabled(self, enabled: bool):
         if enabled:
@@ -39,8 +40,11 @@ class MicMonitorThread(QThread):
                     arr = arr[:-1]
                 with self.buffer_lock:
                     self.translated_audio_buffer = arr.reshape(-1, 2)
-
             self.ws_client.register_audio_callback(on_translated_audio)
+            if self.lang_combo:
+                text = self.lang_combo.currentText()
+                lang = self.get_lang_code(text)
+                self.update_language(src_lang=lang)
         else:
             self.ws_client.disconnect()
             with self.buffer_lock:
@@ -116,7 +120,6 @@ class MicMonitorThread(QThread):
         adjusted_rms = max(0, rms - volume_threshold)
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
-
 
     def stop(self):
         self.running = False

@@ -27,6 +27,7 @@ BLOCKED_KEYWORDS = [
         "Hãy subscribe cho kênh",
         "Ghiền Mì Gõ", 
         "Cảm ơn các bạn.",
+        "Hẹn gặp lại ở video tiếp theo",
     ]
         
 
@@ -41,6 +42,7 @@ class AudioBuffer:
         self.raw_frames = []
         self.speaking = False
         self.last_voice_time = time.time()
+        self.src_lang = "vi"
         self.queue = queue.Queue()
         threading.Thread(target=self.audio_worker, daemon=True).start()
 
@@ -96,20 +98,21 @@ class AudioBuffer:
         audio_16k = resampy.resample(mono, WS_SAMPLE_RATE, 16000)
 
         if len(audio_16k) < 16000:
-            print(f"[WHISPER] Skipped: too short ({len(audio_16k)} samples)")
+            #print(f"[WHISPER] Skipped: too short ({len(audio_16k)} samples)")
             return
 
         try:
-            result = whisper_model.transcribe(audio_16k, language="vi")
+            result = whisper_model.transcribe(audio_16k, language=self.src_lang)
             text = result['text'].strip()
 
-            if any(keyword.lower() in text.lower() for keyword in BLOCKED_KEYWORDS) o :
+            if any(keyword.lower() in text.lower() for keyword in BLOCKED_KEYWORDS) or not text:
                 return
 
-            print(f"[WHISPER] Role: {self.role} | Text: {result['text']}")
+            print(f"[WHISPER] Role: {self.role} | Language: {self.src_lang} | Text: {result['text']}")
 
         except Exception as e:
             print(f"[ERROR] Whisper failed: {e}")
+
 
 def process_audio_frame(frame_bytes: bytes, role: str, buffer_user: AudioBuffer, buffer_other: AudioBuffer):
     samples = np.frombuffer(frame_bytes, dtype=np.int16).reshape(-1, CHANNELS)
@@ -138,32 +141,68 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
     frame_accum_other = b""
     recv_buffer = b""
 
+    # Track the last known language settings per role
+    prev_langs = {
+        "user": {"src": "vi", "tgt": "transcript"},   # Default: Vietnamese
+        "other": {"src": "ja", "tgt": "transcript"}   # Default: Japanese
+    }
+
     while True:
         try:
             chunk = await websocket.receive_bytes()
             recv_buffer += chunk
 
             while len(recv_buffer) >= 4:
+                # Read header length (first 4 bytes)
                 header_len = struct.unpack("!I", recv_buffer[:4])[0]
                 if len(recv_buffer) < 4 + header_len:
-                    break
+                    break  # Wait for more data
 
+                # Parse header JSON
                 header_bytes = recv_buffer[4:4 + header_len]
                 try:
                     header = json.loads(header_bytes.decode("utf-8"))
                     role = header.get("sender", "unknown")
-                except:
+
+                    if role not in ["user", "other"]:
+                        recv_buffer = recv_buffer[4 + header_len:]
+                        continue
+
+                    # Extract language from header, fallback to previous
+                    new_src = header.get("src_lang", prev_langs[role]["src"])
+                    new_tgt = header.get("tgt_lang", prev_langs[role]["tgt"])
+                    # Only update language if there's a change
+                    if new_src != prev_langs[role]["src"] or new_tgt != prev_langs[role]["tgt"]:
+                        print(f"[LANGUAGE CHANGE] Role: {role} Source: {new_src}, Target: {new_tgt}")
+                        prev_langs[role]["src"] = new_src
+                        prev_langs[role]["tgt"] = new_tgt
+
+                        if role == "user":
+                            buffer_user.src_lang = new_src
+                        elif role == "other":
+                            buffer_other.src_lang = new_src
+
+                except Exception as e:
+                    print(f"[HEADER ERROR]: {e}")
                     recv_buffer = recv_buffer[4 + header_len:]
                     continue
 
+                except:
+                    # Skip malformed header and continue
+                    recv_buffer = recv_buffer[4 + header_len:]
+                    continue
+
+                # Extract the remaining audio payload
                 full_len = 4 + header_len
                 remaining = recv_buffer[full_len:]
                 recv_buffer = b""
 
+                # Align PCM bytes to full audio frames
                 sample_align = CHANNELS * BYTES_PER_SAMPLE
                 valid_len = len(remaining) - (len(remaining) % sample_align)
                 pcm_bytes = remaining[:valid_len]
 
+                # Accumulate and process audio frames by role
                 if role == "user":
                     frame_accum_user += pcm_bytes
                     while len(frame_accum_user) >= FRAME_BYTES:
@@ -184,7 +223,6 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
             print("[WebSocket Error]:", e)
             break
 
-
 @router.websocket("/ws/audio")
 async def audio_socket(websocket: WebSocket):
     await websocket.accept()
@@ -193,7 +231,9 @@ async def audio_socket(websocket: WebSocket):
     vad_other = webrtcvad.Vad(1)
 
     buffer_user = AudioBuffer("user", vad_user)
+    buffer_user.src_lang = "vi"
     buffer_other = AudioBuffer("other", vad_other)
+    buffer_other.src_lang = "jp"
 
     async def heartbeat():
         while True:

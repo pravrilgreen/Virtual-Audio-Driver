@@ -28,6 +28,7 @@ class WebSocketPCMClient:
         self.stop_event = threading.Event()
         self.audio_callback = None
         self.manual_stop = False  # New flag to distinguish manual vs. error stop
+        self.transcript_callback = None
 
     def connect(self):
         if self.connected or self.running:
@@ -75,6 +76,15 @@ class WebSocketPCMClient:
         if auto_reconnect:
             self._attempt_reconnect()
 
+    def update_language(self, src_lang: str, tgt_lang: str):
+        with self.lock:
+            self.src_lang = src_lang
+            self.tgt_lang = tgt_lang
+        print(f"[LANGUAGE UPDATE] Role: {self.role} Source: {src_lang} -> Target: {tgt_lang}")
+
+    def register_transcript_callback(self, callback_fn):
+        self.transcript_callback = callback_fn
+        
     def send_pcm_chunk(self, pcm_bytes: bytes):
         if not self.connected or not self.running or not self.ws:
             return
@@ -90,10 +100,14 @@ class WebSocketPCMClient:
             try:
                 pcm_bytes = self.send_queue.get(timeout=1)
 
+                with self.lock:
+                    src_lang = self.src_lang
+                    tgt_lang = self.tgt_lang
+
                 header = {
                     "sender": self.role,
-                    "src_lang": self.src_lang,
-                    "tgt_lang": self.tgt_lang,
+                    "src_lang": src_lang,
+                    "tgt_lang": tgt_lang,
                     "format": "pcm_s16le",
                     "rate": self.rate,
                     "channels": self.channels,
@@ -124,7 +138,7 @@ class WebSocketPCMClient:
                 msg = self.ws.recv()
                 if isinstance(msg, str):
                     if msg.strip().lower() == "ping":
-                        print("[server] ping pong")
+                        #print("[server] ping")
                         continue
                 elif isinstance(msg, bytes) and self.audio_callback:
                     self.audio_callback(msg)
