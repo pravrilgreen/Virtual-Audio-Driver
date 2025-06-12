@@ -1,2 +1,9 @@
 PySide6
 numpy
+webrtcvad
+fastapi
+openai-whisper
+sounddevice
+soundfile
+uvicorn[standard]
+scipy

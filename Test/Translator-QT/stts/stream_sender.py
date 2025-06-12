@@ -20,7 +20,7 @@ class WebSocketPCMClient:
         self.channels = 2
         self.sample_width = 2
 
-        self.send_queue = queue.Queue(maxsize=100)
+        self.send_queue = queue.Queue(maxsize=500)
         self.receiver_thread = None
         self.sender_thread = None
         self.running = False
@@ -106,7 +106,7 @@ class WebSocketPCMClient:
                 with self.lock:
                     if self.ws and self.connected:
                         self.ws.send_binary(message)
-                        print(f"[SEND] {len(pcm_bytes)} bytes sent for role: {self.role}")
+                        #print(f"[SEND] {len(pcm_bytes)} bytes sent for role: {self.role}")
                     else:
                         print("[WebSocketPCMClient] Cannot send: WebSocket is not connected.")
 
@@ -120,7 +120,15 @@ class WebSocketPCMClient:
         while self.running and not self.stop_event.is_set():
             try:
                 msg = self.ws.recv()
-                if isinstance(msg, bytes) and self.audio_callback:
+                if isinstance(msg, str):
+                    try:
+                        data = json.loads(msg)
+                        if data.get("type") == "ping":
+                            print("[server] ping pong")
+                            continue 
+                    except Exception:
+                        pass
+                elif isinstance(msg, bytes) and self.audio_callback:
                     self.audio_callback(msg)
             except Exception as e:
                 print("[WS RECEIVER ERROR]", e)
