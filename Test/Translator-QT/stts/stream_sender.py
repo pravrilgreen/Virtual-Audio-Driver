@@ -79,9 +79,11 @@ class WebSocketPCMClient:
         if not self.connected or not self.running or not self.ws:
             return
         try:
-            self.send_queue.put_nowait(pcm_bytes)
+            # Block until space available (up to 1 sec), avoids dropping frames
+            self.send_queue.put(pcm_bytes, timeout=1)
         except queue.Full:
-            print("[WebSocketPCMClient] Send queue full. Dropping chunk.")
+            print("[WARN] Send queue full. Audio frame dropped.")
+
 
     def _sender_loop(self):
         while self.running and not self.stop_event.is_set():
@@ -121,18 +123,15 @@ class WebSocketPCMClient:
             try:
                 msg = self.ws.recv()
                 if isinstance(msg, str):
-                    try:
-                        data = json.loads(msg)
-                        if data.get("type") == "ping":
-                            print("[server] ping pong")
-                            continue 
-                    except Exception:
-                        pass
+                    if msg.strip().lower() == "ping":
+                        print("[server] ping pong")
+                        continue
                 elif isinstance(msg, bytes) and self.audio_callback:
                     self.audio_callback(msg)
             except Exception as e:
                 print("[WS RECEIVER ERROR]", e)
                 self.disconnect(auto_reconnect=True)
+
 
     def _attempt_reconnect(self):
         if self.manual_stop:

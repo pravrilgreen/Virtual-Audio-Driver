@@ -74,17 +74,22 @@ class MicMonitorThread(QThread):
             print("[ERROR] Failed to start mic stream:", e)
 
     def audio_callback(self, indata, frames, time_info, status):
-        mono = indata[:, 0]
+        # === 1. Extract raw mono mic input (int16) ===
+        raw_mono = indata[:, 0].copy()
 
+        # === 2. Send raw (unmodified) stereo data to server ===
+        raw_stereo = np.repeat(raw_mono[:, np.newaxis], 2, axis=1)
+        if self.ws_client.connected:
+            self.ws_client.send_pcm_chunk(raw_stereo.astype(np.int16).tobytes())
+
+        # === 3. Apply microphone gain for local playback only ===
         mic_level = SettingsManager().get("microphone_level", 100)
         mic_gain = mic_level / 100.0
-        mono = (mono.astype(np.float32) * mic_gain).astype(np.int16)
-
+        mono = raw_mono.astype(np.float32) * mic_gain
+        mono = np.clip(mono, -32768, 32767).astype(np.int16)
         mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
 
-        if self.ws_client.connected:
-            self.ws_client.send_pcm_chunk(mic_stereo.astype(np.int16).tobytes())
-
+        # === 4. Get translated audio buffer (if available) ===
         with self.buffer_lock:
             if self.translated_audio_buffer is not None:
                 translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
@@ -93,23 +98,25 @@ class MicMonitorThread(QThread):
             else:
                 translated = np.zeros_like(mic_stereo, dtype=np.int16)
 
+        # === 5. Mix mic input and translated audio ===
         settings = SettingsManager()
         direct_volume = settings.get("direct_volume", 100)
         translated_volume = settings.get("translated_volume", 100)
-
         mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
         mixed = mixer.mix(mic_stereo, translated)
 
+        # === 6. Convert mixed audio to int32 and write to virtual mic ===
         mixed_int32 = mixed.astype(np.int32) << 16
         self.writer.feed_audio(mixed_int32.tobytes())
 
-        # TÍNH RMS
-        rms = np.sqrt(np.mean(mono.astype(np.float64) ** 2))
+        # === 7. Compute and emit volume level (RMS) ===
+        rms = np.sqrt(np.mean(raw_mono.astype(np.float64) ** 2))
         volume_threshold = 300
         MAX_RMS = 9000
         adjusted_rms = max(0, rms - volume_threshold)
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
+
 
     def stop(self):
         self.running = False

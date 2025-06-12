@@ -1,9 +1,9 @@
 {
     "microphone": "Microphone (Scarlett 2i2 USB)",
     "speaker": "Speakers (Scarlett 2i2 USB)",
-    "microphone_level": 81,
+    "microphone_level": 100,
     "speaker_level": 100,
-    "direct_volume": 72,
+    "direct_volume": 100,
     "translated_volume": 100,
     "llm_model": "Gemma3:12b",
     "api_url": "http://10.133.134.206:8080/api/tags",
