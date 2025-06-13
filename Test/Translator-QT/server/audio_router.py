@@ -13,6 +13,10 @@ from pydub import AudioSegment  # type: ignore
 from pydub.effects import low_pass_filter  # type: ignore
 import whisper
 from starlette.websockets import WebSocketState
+import base64
+# from modules.synthesizer import tts # Uncomment for deploy
+# from modules.translator.core.orchestrator import Orchestrator as Translator  # Uncomment for deploy
+
 
 app = FastAPI()
 router = APIRouter()
@@ -29,9 +33,16 @@ BLOCKED_KEYWORDS = [
     "Ghiền Mì Gõ",
     "Cảm ơn các bạn.",
     "Hẹn gặp lại ở video tiếp theo",
+    "Chào mừng quý vị đến với bộ phim",
+    "Chúc các bạn đừng quên đăng ký",
+    "ご視聴ありがとうございました",
+    "Cảm ơn các bạn đã xem video hấp dẫn",
+    "ご視聴ありがとうございました",
 ]
 
 whisper_model = whisper.load_model("medium").to("cuda")
+
+#translator = Translator()  # Uncomment for deploy
 
 
 class AudioBuffer:
@@ -45,6 +56,7 @@ class AudioBuffer:
         self.speaking = False
         self.last_voice_time = time.time()
         self.src_lang = "vi"
+        self.tgt_lang = "jp"
         self.queue = queue.Queue()
         threading.Thread(target=self.audio_worker, daemon=True).start()
 
@@ -91,10 +103,10 @@ class AudioBuffer:
             result = self.queue.get()
             if result:
                 audio, raw_pcm = result
-                self.transcribe_with_whisper(raw_pcm)
+                self.audio_process_pipeline(raw_pcm)
             self.queue.task_done()
 
-    def transcribe_with_whisper(self, raw_pcm):
+    def audio_process_pipeline(self, raw_pcm):
         samples = np.frombuffer(raw_pcm, dtype=np.int16).reshape(-1, CHANNELS)
         mono = samples.mean(axis=1).astype(np.float32) / 32768.0
         audio_16k = resampy.resample(mono, WS_SAMPLE_RATE, 16000)
@@ -103,26 +115,40 @@ class AudioBuffer:
             return
 
         try:
+            # 1. Transribe audio -> text
             result = whisper_model.transcribe(audio_16k, language=self.src_lang)
             text = result['text'].strip()
 
             if any(keyword.lower() in text.lower() for keyword in BLOCKED_KEYWORDS) or not text:
                 return
 
-            print(f"[WHISPER] Role: {self.role} | Language: {self.src_lang} | Text: {text}")
+            print(f"[WHISPER] Role: {self.role} | Language: {self.tgt_lang} | Text: {text}")
 
+            # DUMMY
             with open("sample.wav", "rb") as f:
                 wav_bytes = f.read()
-            
+
+            # ================   Uncomment for deploy ================
+            # 2. Translate text to self.tgt_lang -> output <translated text>
+            # texts_translated = translator.translate(texts=[text], src=self.src_lang, tgt=self.tgt_lang) 
+            # text_translated = ' '.join(texts_translated) 
+
+            # if self.tgt_lang == "ja":
+            #     audio_hex = tts.tts_japanese(text_translated) # TODO: translated_text
+            # else:
+            #     audio_hex = tts.tts_vietnamese(text_translated) # TODO: translated_text
+             # ================   Uncomment for deploy ================
+
+            # 3. TTS <translated text> -> output audio (WAV byte)
             package = {
-                "type": "transcript_with_audio",
+                "type": "translate_with_audio",
                 "data": {
-                    "text": text,
-                    "role": self.role,
-                    "audio_bytes": wav_bytes.hex(),
+                    "text": text, # -> replace <translated text>
+                    "role": self.role, # user or other
+                    "audio_bytes": wav_bytes.hex()
                 }
             }
-
+            
             # Push message to main loop's queue
             print(f"[QUEUE PUSH] Role: {self.role} | Pushing message: {text}")
             self.loop.call_soon_threadsafe(self.message_queue.put_nowait, package)
@@ -191,8 +217,10 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
 
                         if role == "user":
                             buffer_user.src_lang = new_src
+                            buffer_user.tgt_lang = new_tgt
                         elif role == "other":
                             buffer_other.src_lang = new_src
+                            buffer_other.tgt_lang = new_tgt
 
                 except Exception as e:
                     print(f"[HEADER ERROR]: {e}")
@@ -240,8 +268,10 @@ async def audio_socket(websocket: WebSocket):
 
     buffer_user = AudioBuffer("user", vad_user, message_queue, loop)
     buffer_user.src_lang = "vi"
+    buffer_user.tgt_lang = "ja"
     buffer_other = AudioBuffer("other", vad_other, message_queue, loop)
     buffer_other.src_lang = "ja"
+    buffer_other.tgt_lang = "vi"
 
     async def heartbeat():
         while True:

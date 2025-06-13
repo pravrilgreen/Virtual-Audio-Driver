@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadow
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer
 from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Signal
 
 from gui.ui_form import Ui_Widget
 import gui.rc_resources
@@ -21,7 +22,7 @@ from gui.settings_dialog import SettingsDialog
 from settings_manager import SettingsManager
 from core.virtual_audio import VirtualSpeakerKeepAlive, VirtualMicKeepAlive
 from devices.audio_devices import find_output_device_index_by_name
-
+from html import escape
 
 def wav_to_pcm_bytes(wav_path: str) -> bytes:
     data, sr = sf.read(wav_path, always_2d=True)
@@ -40,6 +41,7 @@ def wav_to_pcm_bytes(wav_path: str) -> bytes:
     return pcm_data.tobytes()
 
 class Widget(QWidget):
+    transcript_received = Signal(str, str, str) # role, text, color
     def __init__(self, parent=None):
         super().__init__(parent)
         self.mic_thread = None
@@ -47,6 +49,7 @@ class Widget(QWidget):
         self.mic_on = False
         self.ui = Ui_Widget()
         self.setupUi()
+        self.transcript_received.connect(self.display_transcript_line)
         self.settings_manager = SettingsManager()
 
         # === Virtual Devices Keep Alive ===
@@ -287,20 +290,23 @@ class Widget(QWidget):
         text = data.get("text", "").strip()
         if not text:
             return
+    
+        role_colors = {
+            "user": "#2e86de",
+            "other": "#16a085"
+        }
+        color = role_colors.get(role.lower(), "#555555")
+    
+        self.transcript_received.emit(role, text, color)
 
-        if role.lower() == "user":
-            color = "#2e86de"
-        elif role.lower() == "other":
-            color = "#16a085"
-        else:
-            color = "#555555"
-
-        print("[handle_transcript] for", role)
-
-        html_line = f'<span style="color:{color}; font-weight: bold;">{role}:</span> <span style="color:black;">{text}</span>'
+    def display_transcript_line(self, role: str, text: str, color: str):
+        text = escape(text)
+        html_line = (
+            f'<span style="color:{color}; font-weight: bold;">{role}:</span> '
+            f'<span style="color:black;">{text}</span><br>'
+        )
         self.ui.textChatBox.moveCursor(QTextCursor.End)
-        self.ui.textChatBox.insertHtml(html_line + "<br>")
-
+        self.ui.textChatBox.insertHtml(html_line)
         
     def closeEvent(self, event):
         self.speaker_thread.stop()
@@ -320,4 +326,3 @@ class Widget(QWidget):
             self.pcm_thread.stop()
 
         super().closeEvent(event)
-

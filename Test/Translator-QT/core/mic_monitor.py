@@ -13,6 +13,9 @@ import pywintypes
 from core.audio_mixer import AudioMixer
 from settings_manager import SettingsManager
 from stts.stream_sender import WebSocketPCMClient
+from pydub import AudioSegment
+import io
+from core.translated_audio_manager import TranslatedAudioManager
 
 class MicMonitorThread(QThread):
     volume_signal = Signal(int)
@@ -23,39 +26,21 @@ class MicMonitorThread(QThread):
         self.push_to_virtual = push_to_virtual
         self.running = True
         self.stream = None
-        self.translated_audio_buffer = None
+        self.translated_audio_queue = queue.Queue()
+        self.current_translated_chunk = None
+        self.translated_offset = 0
+        self.translated_audio_lock = threading.Lock()
         self.buffer_lock = threading.Lock()
         self.ws_client = WebSocketPCMClient(role="user")
         self.lang_combo = lang_combo
-        self.translated_audio_queue = queue.Queue()
-        self.translated_audio_lock = threading.Lock()
+        self.translated_audio_manager = TranslatedAudioManager(chunk_size=1024)
 
     def set_translation_enabled(self, enabled: bool):
         if enabled:
             self.ws_client.connect()
 
             def on_translated_audio(wav_bytes):
-                try:
-                    from pydub import AudioSegment
-                    import io
-
-                    audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
-                    audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(48000)
-                    samples = np.frombuffer(audio.raw_data, dtype=np.int16)
-
-                    # Đảm bảo đủ mẫu để reshape thành stereo
-                    if samples.size % 2 != 0:
-                        samples = samples[:-1]
-
-                    samples = samples.reshape(-1, 2)  # (n, 2)
-
-                    with self.translated_audio_lock:
-                        if self.translated_audio_buffer is None or self.translated_audio_buffer.ndim != 2:
-                            self.translated_audio_buffer = np.empty((0, 2), dtype=np.int16)
-                        self.translated_audio_buffer = np.vstack((self.translated_audio_buffer, samples))
-                except Exception as e:
-                    print("[ERROR] MicMonitorThread - Failed to decode WAV:", e)
-
+                self.translated_audio_manager.add_wav(wav_bytes)
 
             self.ws_client.register_audio_callback(on_translated_audio)
             if self.lang_combo:
@@ -109,13 +94,8 @@ class MicMonitorThread(QThread):
         mono = np.clip(mono, -32768, 32767).astype(np.int16)
         mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
 
-        # 3. Lấy translated audio cùng độ dài
-        with self.buffer_lock:
-            if self.translated_audio_buffer is not None and self.translated_audio_buffer.shape[0] >= mic_stereo.shape[0]:
-                translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
-                self.translated_audio_buffer = self.translated_audio_buffer[mic_stereo.shape[0]:]
-            else:
-                translated = np.zeros_like(mic_stereo, dtype=np.int16)
+        # 3. Lấy translated audio chunk khớp độ dài
+        translated = self.translated_audio_manager.get_next_chunk()
 
         # 4. Mix
         direct_volume = SettingsManager().get("direct_volume", 100)
@@ -134,8 +114,6 @@ class MicMonitorThread(QThread):
         adjusted_rms = max(0, rms - volume_threshold)
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
-
-
 
     def stop(self):
         self.running = False

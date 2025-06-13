@@ -141,7 +141,7 @@ class WebSocketPCMClient:
                     try:
                         data = json.loads(msg)
 
-                        if data.get("type") == "transcript_with_audio":
+                        if data.get("type") == "translate_with_audio":
                             transcript_data = data["data"]
                             text = transcript_data["text"]
                             role = transcript_data["role"]
