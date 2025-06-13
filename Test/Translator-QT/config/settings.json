@@ -3,9 +3,9 @@
     "speaker": "Speakers (Scarlett 2i2 USB)",
     "microphone_level": 100,
     "speaker_level": 100,
-    "direct_volume": 78,
-    "translated_volume": 100,
+    "direct_volume": 43,
+    "translated_volume": 95,
     "llm_model": "Gemma3:12b",
-    "api_url": "http://10.133.134.206:8080/api/tags",
+    "api_url": "http://10.133.134.206:8080/ollama/api/chat",
     "api_token": "tuanlm12"
 }

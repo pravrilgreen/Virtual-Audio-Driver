@@ -233,6 +233,11 @@ class Ui_Widget(object):
 
         self.layoutNewAndSetting.addWidget(self.buttonNewConversation)
 
+        self.pushButton = QPushButton(Widget)
+        self.pushButton.setObjectName(u"pushButton")
+
+        self.layoutNewAndSetting.addWidget(self.pushButton)
+
         self.spacerBetweenNewAndSetting = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.layoutNewAndSetting.addItem(self.spacerBetweenNewAndSetting)
@@ -282,6 +287,7 @@ class Ui_Widget(object):
         self.comboMyLang.setItemText(2, QCoreApplication.translate("Widget", u"Japanese (\u65e5\u672c)", None))
 
         self.buttonNewConversation.setText(QCoreApplication.translate("Widget", u"NEW Conversation", None))
+        self.pushButton.setText(QCoreApplication.translate("Widget", u"History", None))
 #if QT_CONFIG(tooltip)
         self.buttonSettings.setToolTip(QCoreApplication.translate("Widget", u"Settings", None))
 #endif // QT_CONFIG(tooltip)

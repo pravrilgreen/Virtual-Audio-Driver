@@ -40,7 +40,7 @@ BLOCKED_KEYWORDS = [
     "ご視聴ありがとうございました",
 ]
 
-whisper_model = whisper.load_model("medium").to("cuda")
+whisper_model = whisper.load_model("large").to("cuda")
 
 #translator = Translator()  # Uncomment for deploy
 
@@ -94,7 +94,8 @@ class AudioBuffer:
         self.raw_frames = []
         duration = len(audio) / SAMPLE_RATE
         energy = np.sqrt(np.mean(audio ** 2))
-        if duration < 0.2 or energy < 0.01:
+        #print(f"[DEBUG] Duration: {duration:.3f}s | Energy: {energy:.4f}")
+        if duration < 0.1 or energy < 0.005:
             return None
         return audio, raw_pcm
 
@@ -260,8 +261,8 @@ async def process_audio_stream(websocket: WebSocket, buffer_user: AudioBuffer, b
 async def audio_socket(websocket: WebSocket):
     await websocket.accept()
 
-    vad_user = webrtcvad.Vad(1)
-    vad_other = webrtcvad.Vad(1)
+    vad_user = webrtcvad.Vad(2)
+    vad_other = webrtcvad.Vad(2)
 
     loop = asyncio.get_running_loop()
     message_queue = asyncio.Queue()

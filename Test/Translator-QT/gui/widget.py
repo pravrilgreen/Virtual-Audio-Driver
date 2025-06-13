@@ -7,6 +7,7 @@ import json
 import struct
 import librosa
 import soundfile as sf
+import os
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
 from PySide6.QtGui import QColor
@@ -15,6 +16,7 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtCore import Signal
 
 from gui.ui_form import Ui_Widget
+from gui.history_dialog import HistoryDialog
 import gui.rc_resources
 from core.speaker_monitor import SpeakerMonitorThread
 from core.mic_monitor import MicMonitorThread, VirtualMicWriter, PCMPlayerThread
@@ -23,6 +25,7 @@ from settings_manager import SettingsManager
 from core.virtual_audio import VirtualSpeakerKeepAlive, VirtualMicKeepAlive
 from devices.audio_devices import find_output_device_index_by_name
 from html import escape
+from datetime import datetime
 
 def wav_to_pcm_bytes(wav_path: str) -> bytes:
     data, sr = sf.read(wav_path, always_2d=True)
@@ -83,6 +86,9 @@ class Widget(QWidget):
         self.ui.comboCustomerLang.currentIndexChanged.connect(self.on_customer_lang_changed)
         self.update_ws_languages()
 
+         # === Open history  ===
+        self.ui.pushButton.clicked.connect(self.open_history_dialog)
+
     def setupUi(self):
         self.ui.setupUi(self)
         self.glow_effects = {}
@@ -118,6 +124,9 @@ class Widget(QWidget):
         self.mic_thread.ws_client.register_transcript_callback(self.handle_transcript)
         self.mic_thread.start()
 
+    def open_history_dialog(self):
+        dialog = HistoryDialog(parent=self)
+        dialog.exec()
 
     def toggle_mic(self):
         if self.mic_on:
@@ -210,8 +219,27 @@ class Widget(QWidget):
 
     def new_conversation(self):
         print("New conversation started")
+
+        chat_content = self.ui.textChatBox.toHtml().strip()
+        plain_text = self.ui.textChatBox.toPlainText().strip()
+
+        if plain_text:
+            history_dir = os.path.join(os.getcwd(), "history")
+            os.makedirs(history_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            history_file = os.path.join(history_dir, f"chat_{timestamp}.html")
+
+            try:
+                with open(history_file, "w", encoding="utf-8") as f:
+                    f.write(chat_content)
+                print(f"Saved chat history to {history_file}")
+            except Exception as e:
+                print(f"Error saving chat history: {e}")
+        else:
+            print("No chat content to save.")
+
         self.ui.textChatBox.clear()
-        self.ui.textSummaryBox.clear()
 
     def add_sound_effect(self, target_label: QLabel):
         target_label.setStyleSheet("""
@@ -301,12 +329,14 @@ class Widget(QWidget):
 
     def display_transcript_line(self, role: str, text: str, color: str):
         text = escape(text)
+        timestamp = datetime.now().strftime('%H:%M:%S')
         html_line = (
+            f'<span style="color:gray; font-size:small;">[{timestamp}]</span> '
             f'<span style="color:{color}; font-weight: bold;">{role}:</span> '
             f'<span style="color:black;">{text}</span><br>'
         )
-        self.ui.textChatBox.moveCursor(QTextCursor.End)
         self.ui.textChatBox.insertHtml(html_line)
+        self.ui.textChatBox.moveCursor(QTextCursor.End)
         
     def closeEvent(self, event):
         self.speaker_thread.stop()

@@ -27,12 +27,12 @@ class SpeakerMonitorThread(QThread):
         self.enable_translation = True
         self.output_stream = None
         self.output_device_index = None
-        self.playback_queue = queue.Queue()
-        self.playback_thread = threading.Thread(target=self._playback_loop, daemon=True)
+        # self.playback_queue = queue.Queue()
+        # self.playback_thread = threading.Thread(target=self._playback_loop, daemon=True)
         self.translated_audio_buffer = None
         self.translation_playing = False
         self.lang_combo = lang_combo
-        self.translated_audio_manager = TranslatedAudioManager(2048)
+        self.translated_audio_manager = TranslatedAudioManager(sample_rate=48000)
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
@@ -40,6 +40,7 @@ class SpeakerMonitorThread(QThread):
             self.ws_client.connect()
 
             def on_translated_audio(wav_bytes):
+                print("[SpeakerMonitorThread] Received audio from server.")
                 self.translated_audio_manager.add_wav(wav_bytes)
 
             self.ws_client.register_audio_callback(on_translated_audio)
@@ -50,36 +51,6 @@ class SpeakerMonitorThread(QThread):
         else:
             self.ws_client.disconnect()
             self.translated_audio_buffer = None
-
-    def _playback_loop(self):
-        while self.running:
-            try:
-                chunk = self.playback_queue.get(timeout=0.1)
-                audio = np.frombuffer(chunk, dtype=np.int16)
-                if audio.size % 2 != 0:
-                    audio = audio[:-1]
-                audio = audio.reshape(-1, 2)
-
-                # Lấy translated audio cùng độ dài
-                translated = self.translated_audio_manager.get_next_chunk()
-
-                # Mixer
-                settings = SettingsManager()
-                direct_volume = settings.get("direct_volume", 100)
-                translated_volume = settings.get("translated_volume", 100)
-                speaker_level = settings.get("speaker_level", 100)
-                mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
-                mixed = mixer.mix(audio, translated)
-
-                # Phát ra loa
-                mixed = mixed.astype(np.float32) * (speaker_level / 100.0)
-                mixed = np.clip(mixed, -32768, 32767).astype(np.int16)
-                self.output_stream.write(mixed.tobytes())
-
-            except queue.Empty:
-                continue
-            except Exception as e:
-                print("[WARN] Playback thread error:", e)
 
 
     def run(self):
@@ -134,7 +105,7 @@ class SpeakerMonitorThread(QThread):
                 latency='low'
             )
             self.output_stream.start()
-            self.playback_thread.start()
+            #self.playback_thread.start()
         except Exception as e:
             print("[ERROR] Failed to open output stream:", e)
             CloseHandle(handle)
@@ -191,7 +162,28 @@ class SpeakerMonitorThread(QThread):
 
                 # Send to real speaker
                 try:
-                    self.playback_queue.put(audio.astype(np.int16).tobytes(), timeout=0.1)
+                    audio_chunk = audio.astype(np.int16)
+                    chunk_size = audio_chunk.shape[0]
+                    translated = self.translated_audio_manager.get_chunk_by_samples(chunk_size)
+
+                    if translated is None:
+                        translated = np.zeros((chunk_size, 2), dtype=np.int16)
+
+                    # Lấy cài đặt âm lượng
+                    settings = SettingsManager()
+                    direct_volume = settings.get("direct_volume", 100)
+                    translated_volume = settings.get("translated_volume", 100)
+                    speaker_level = settings.get("speaker_level", 100)
+
+                    # Trộn 2 nguồn âm
+                    mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
+                    mixed = mixer.mix(audio_chunk, translated)
+
+                    # Điều chỉnh âm lượng tổng thể và phát ra loa
+                    mixed = mixed.astype(np.float32) * (speaker_level / 100.0)
+                    mixed = np.clip(mixed, -32768, 32767).astype(np.int16)
+                    self.output_stream.write(mixed.tobytes())
+
                 except queue.Full:
                     print("[WARN] playback_queue full, dropping chunk.")
 

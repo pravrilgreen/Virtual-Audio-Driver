@@ -6,47 +6,51 @@ import queue
 
 
 class TranslatedAudioManager:
-    def __init__(self, chunk_size: int = 1024, sample_rate: int = 48000):
-        self.chunk_size = chunk_size
+    def __init__(self, sample_rate=48000):
         self.sample_rate = sample_rate
-        self.file_queue = queue.Queue()
-        self.current_chunks = []
-        self.chunk_index = 0
+        self.buffer = np.zeros((0, 2), dtype=np.int16)  # stereo buffer
         self.lock = threading.Lock()
+        self.read_index = 0
+
 
     def add_wav(self, wav_bytes: bytes):
         """
-        Parse a WAV file and split it into fixed-size stereo chunks (int16).
+        Nhận WAV mới từ server, chuyển về stereo int16 và nối vào buffer.
         """
         try:
             audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
+            print(f"[DEBUG] Translated audio duration: {audio.duration_seconds:.2f}s, length: {len(audio.raw_data)} bytes")
             audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(self.sample_rate)
             samples = np.frombuffer(audio.raw_data, dtype=np.int16).reshape(-1, 2)
 
-            chunks = [samples[i:i + self.chunk_size]
-                      for i in range(0, len(samples), self.chunk_size)]
-
             with self.lock:
-                self.file_queue.put(chunks)
+                self.buffer = np.vstack((self.buffer, samples))
         except Exception as e:
             print(f"[TranslatedAudioManager] Failed to decode WAV: {e}")
 
-    def get_next_chunk(self) -> np.ndarray:
-        """
-        Return the next chunk of translated audio, or silence if none.
-        """
+
+    def get_chunk_by_samples(self, n_samples: int) -> np.ndarray:
         with self.lock:
-            if not self.current_chunks or self.chunk_index >= len(self.current_chunks):
-                if self.file_queue.empty():
-                    return np.zeros((self.chunk_size, 2), dtype=np.int16)
-                self.current_chunks = self.file_queue.get()
-                self.chunk_index = 0
+            end_index = self.read_index + n_samples
+            available = len(self.buffer) - self.read_index
 
-            chunk = self.current_chunks[self.chunk_index]
-            self.chunk_index += 1
+            if available <= 0:
+                return np.zeros((n_samples, 2), dtype=np.int16)  # <-- zero padding toàn bộ
 
-            if chunk.shape[0] < self.chunk_size:
-                pad = np.zeros((self.chunk_size - chunk.shape[0], 2), dtype=np.int16)
-                chunk = np.vstack((chunk, pad))
+            chunk = self.buffer[self.read_index:end_index]
+            self.read_index = min(end_index, len(self.buffer))
 
-            return chunk
+            if len(chunk) < n_samples:
+                # Pad nếu thiếu
+                padding = np.zeros((n_samples - len(chunk), 2), dtype=np.int16)
+                chunk = np.vstack((chunk, padding))
+
+            return chunk.copy()
+
+
+
+    def reset(self):
+        """Reset toàn bộ buffer, dùng khi đổi ngôn ngữ hoặc clear data."""
+        with self.lock:
+            self.buffer = np.zeros((0, 2), dtype=np.int16)
+            self.read_index = 0

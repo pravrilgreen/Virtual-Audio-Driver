@@ -33,13 +33,14 @@ class MicMonitorThread(QThread):
         self.buffer_lock = threading.Lock()
         self.ws_client = WebSocketPCMClient(role="user")
         self.lang_combo = lang_combo
-        self.translated_audio_manager = TranslatedAudioManager(chunk_size=1024)
+        self.translated_audio_manager = TranslatedAudioManager(sample_rate=48000)
 
     def set_translation_enabled(self, enabled: bool):
         if enabled:
             self.ws_client.connect()
 
             def on_translated_audio(wav_bytes):
+                print("[MicMonitorThread] Received audio from server.")
                 self.translated_audio_manager.add_wav(wav_bytes)
 
             self.ws_client.register_audio_callback(on_translated_audio)
@@ -95,7 +96,11 @@ class MicMonitorThread(QThread):
         mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
 
         # 3. Lấy translated audio chunk khớp độ dài
-        translated = self.translated_audio_manager.get_next_chunk()
+        chunk_size = indata.shape[0]  # thường là 1024
+        translated = self.translated_audio_manager.get_chunk_by_samples(chunk_size)         
+
+        if translated is None:
+            translated = np.zeros((chunk_size, 2), dtype=np.int16)
 
         # 4. Mix
         direct_volume = SettingsManager().get("direct_volume", 100)
