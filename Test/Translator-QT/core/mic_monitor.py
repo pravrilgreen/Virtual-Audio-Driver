@@ -27,19 +27,36 @@ class MicMonitorThread(QThread):
         self.buffer_lock = threading.Lock()
         self.ws_client = WebSocketPCMClient(role="user")
         self.lang_combo = lang_combo
+        self.translated_audio_queue = queue.Queue()
+        self.translated_audio_lock = threading.Lock()
 
     def set_translation_enabled(self, enabled: bool):
         if enabled:
             self.ws_client.connect()
 
-            def on_translated_audio(data_bytes):
-                #print("[WebSocketPCMClient] user --- on_translated_audio")
-                return
-                arr = np.frombuffer(data_bytes, dtype=np.int16)
-                if arr.size % 2 != 0:
-                    arr = arr[:-1]
-                with self.buffer_lock:
-                    self.translated_audio_buffer = arr.reshape(-1, 2)
+            def on_translated_audio(wav_bytes):
+                try:
+                    from pydub import AudioSegment
+                    import io
+
+                    audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
+                    audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(48000)
+                    samples = np.frombuffer(audio.raw_data, dtype=np.int16)
+
+                    # Đảm bảo đủ mẫu để reshape thành stereo
+                    if samples.size % 2 != 0:
+                        samples = samples[:-1]
+
+                    samples = samples.reshape(-1, 2)  # (n, 2)
+
+                    with self.translated_audio_lock:
+                        if self.translated_audio_buffer is None or self.translated_audio_buffer.ndim != 2:
+                            self.translated_audio_buffer = np.empty((0, 2), dtype=np.int16)
+                        self.translated_audio_buffer = np.vstack((self.translated_audio_buffer, samples))
+                except Exception as e:
+                    print("[ERROR] MicMonitorThread - Failed to decode WAV:", e)
+
+
             self.ws_client.register_audio_callback(on_translated_audio)
             if self.lang_combo:
                 text = self.lang_combo.currentText()
@@ -48,7 +65,7 @@ class MicMonitorThread(QThread):
         else:
             self.ws_client.disconnect()
             with self.buffer_lock:
-                self.translated_audio_buffer = None
+                self.translated_audio_buffer = np.empty((0, 2), dtype=np.int16)
 
     def find_input_device(self, name):
         for i, dev in enumerate(sd.query_devices()):
@@ -78,48 +95,47 @@ class MicMonitorThread(QThread):
             print("[ERROR] Failed to start mic stream:", e)
 
     def audio_callback(self, indata, frames, time_info, status):
-        # === 1. Extract raw mono mic input (int16) ===
         raw_mono = indata[:, 0].copy()
 
-        # === 2. Send raw (unmodified) stereo data to server ===
+        # 1. Gửi raw stereo lên server
         raw_stereo = np.repeat(raw_mono[:, np.newaxis], 2, axis=1)
         if self.ws_client.connected:
             self.ws_client.send_pcm_chunk(raw_stereo.astype(np.int16).tobytes())
 
-        # === 3. Apply microphone gain for local playback only ===
+        # 2. Mic gain
         mic_level = SettingsManager().get("microphone_level", 100)
         mic_gain = mic_level / 100.0
         mono = raw_mono.astype(np.float32) * mic_gain
         mono = np.clip(mono, -32768, 32767).astype(np.int16)
         mic_stereo = np.repeat(mono[:, np.newaxis], 2, axis=1)
 
-        # === 4. Get translated audio buffer (if available) ===
+        # 3. Lấy translated audio cùng độ dài
         with self.buffer_lock:
-            if self.translated_audio_buffer is not None:
+            if self.translated_audio_buffer is not None and self.translated_audio_buffer.shape[0] >= mic_stereo.shape[0]:
                 translated = self.translated_audio_buffer[:mic_stereo.shape[0]]
-                if translated.shape != mic_stereo.shape:
-                    translated = np.zeros_like(mic_stereo, dtype=np.int16)
+                self.translated_audio_buffer = self.translated_audio_buffer[mic_stereo.shape[0]:]
             else:
                 translated = np.zeros_like(mic_stereo, dtype=np.int16)
 
-        # === 5. Mix mic input and translated audio ===
-        settings = SettingsManager()
-        direct_volume = settings.get("direct_volume", 100)
-        translated_volume = settings.get("translated_volume", 100)
+        # 4. Mix
+        direct_volume = SettingsManager().get("direct_volume", 100)
+        translated_volume = SettingsManager().get("translated_volume", 100)
         mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
         mixed = mixer.mix(mic_stereo, translated)
 
-        # === 6. Convert mixed audio to int32 and write to virtual mic ===
+        # 5. Gửi ra virtual mic
         mixed_int32 = mixed.astype(np.int32) << 16
         self.writer.feed_audio(mixed_int32.tobytes())
 
-        # === 7. Compute and emit volume level (RMS) ===
+        # 6. Volume RMS
         rms = np.sqrt(np.mean(raw_mono.astype(np.float64) ** 2))
         volume_threshold = 300
         MAX_RMS = 9000
         adjusted_rms = max(0, rms - volume_threshold)
         volume = int(min(100, math.log1p(adjusted_rms) / math.log1p(MAX_RMS) * 100))
         self.volume_signal.emit(volume)
+
+
 
     def stop(self):
         self.running = False

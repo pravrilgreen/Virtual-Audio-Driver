@@ -111,14 +111,21 @@ class AudioBuffer:
 
             print(f"[WHISPER] Role: {self.role} | Language: {self.src_lang} | Text: {text}")
 
-            message = {
-                "sender": self.role,
-                "text": text
+            with open("sample.wav", "rb") as f:
+                wav_bytes = f.read()
+            
+            package = {
+                "type": "transcript_with_audio",
+                "data": {
+                    "text": text,
+                    "role": self.role,
+                    "audio_bytes": wav_bytes.hex(),
+                }
             }
 
             # Push message to main loop's queue
             print(f"[QUEUE PUSH] Role: {self.role} | Pushing message: {text}")
-            self.loop.call_soon_threadsafe(self.message_queue.put_nowait, message)
+            self.loop.call_soon_threadsafe(self.message_queue.put_nowait, package)
 
         except Exception as e:
             print(f"[ERROR] Whisper failed: {e}")
@@ -247,11 +254,10 @@ async def audio_socket(websocket: WebSocket):
 
     async def message_sender():
         while True:
-            message = await message_queue.get()
-            print(f"[QUEUE] Got message from role: {message['sender']} | Text: {message['text']}")
+            package = await message_queue.get()
             try:
-                await websocket.send_json(message)
-                print(f"[SEND SUCCESS] Sent to client: {message}")
+                await websocket.send_json(package)
+                print(f"[SEND SUCCESS] Sent package to client")
             except Exception as e:
                 print(f"[SEND ERROR] {e}")
                 break

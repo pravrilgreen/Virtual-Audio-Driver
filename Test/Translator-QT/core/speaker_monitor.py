@@ -10,6 +10,9 @@ import threading
 import json
 import struct
 from scipy.signal import resample_poly
+from core.audio_mixer import AudioMixer
+from settings_manager import SettingsManager
+
 
 class SpeakerMonitorThread(QThread):
     volume_signal = Signal(int)
@@ -28,19 +31,36 @@ class SpeakerMonitorThread(QThread):
         self.translation_playing = False
         self.translated_audio_lock = threading.Lock()
         self.lang_combo = lang_combo
+        self.translated_audio_queue = queue.Queue()
 
     def set_translation_enabled(self, enabled: bool):
         self.enable_translation = enabled
         if enabled:
             self.ws_client.connect()
 
-            def on_translated_audio(data_bytes):
-                #print("[WebSocketPCMClient] other --- on_translated_audio")
-                return
-                arr = np.frombuffer(data_bytes, dtype=np.int16)
-                if arr.size % 2 != 0:
-                    arr = arr[:-1]
-                self.translated_audio_buffer = arr.reshape(-1, 2)
+            def on_translated_audio(wav_bytes):
+                try:
+                    from pydub import AudioSegment
+                    import io
+
+                    audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
+                    audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(48000)
+                    samples = np.frombuffer(audio.raw_data, dtype=np.int16)
+
+                    # Đảm bảo đủ mẫu để reshape thành stereo
+                    if samples.size % 2 != 0:
+                        samples = samples[:-1]
+
+                    samples = samples.reshape(-1, 2)  # (n, 2)
+
+                    with self.translated_audio_lock:
+                        if self.translated_audio_buffer is None or self.translated_audio_buffer.ndim != 2:
+                            self.translated_audio_buffer = np.empty((0, 2), dtype=np.int16)
+                        self.translated_audio_buffer = np.vstack((self.translated_audio_buffer, samples))
+                except Exception as e:
+                    print("[ERROR] MicMonitorThread - Failed to decode WAV:", e)
+
+
 
             self.ws_client.register_audio_callback(on_translated_audio)
             if self.lang_combo:
@@ -52,42 +72,41 @@ class SpeakerMonitorThread(QThread):
             self.translated_audio_buffer = None
 
     def _playback_loop(self):
-        from core.audio_mixer import AudioMixer
-        from settings_manager import SettingsManager
-
         while self.running:
             try:
                 chunk = self.playback_queue.get(timeout=0.1)
-
                 audio = np.frombuffer(chunk, dtype=np.int16)
-                if len(audio) % 2 != 0:
+                if audio.size % 2 != 0:
                     audio = audio[:-1]
                 audio = audio.reshape(-1, 2)
 
+                # Lấy translated audio cùng độ dài
+                with self.translated_audio_lock:
+                    if self.translated_audio_buffer is not None and self.translated_audio_buffer.shape[0] >= audio.shape[0]:
+                        translated = self.translated_audio_buffer[:audio.shape[0]]
+                        self.translated_audio_buffer = self.translated_audio_buffer[audio.shape[0]:]
+                    else:
+                        translated = np.zeros_like(audio, dtype=np.int16)
+
+                # Mixer
                 settings = SettingsManager()
                 direct_volume = settings.get("direct_volume", 100)
                 translated_volume = settings.get("translated_volume", 100)
                 speaker_level = settings.get("speaker_level", 100)
-
-                if self.translated_audio_buffer is not None:
-                    translated = self.translated_audio_buffer[:audio.shape[0]]
-                    if translated.shape != audio.shape:
-                        translated = np.zeros_like(audio, dtype=np.int16)
-                else:
-                    translated = np.zeros_like(audio, dtype=np.int16)
-
                 mixer = AudioMixer(direct_volume=direct_volume, translated_volume=translated_volume)
                 mixed = mixer.mix(audio, translated)
 
+                # Phát ra loa
                 mixed = mixed.astype(np.float32) * (speaker_level / 100.0)
                 mixed = np.clip(mixed, -32768, 32767).astype(np.int16)
-
                 self.output_stream.write(mixed.tobytes())
 
             except queue.Empty:
                 continue
             except Exception as e:
                 print("[WARN] Playback thread error:", e)
+
+
 
     def run(self):
         GENERIC_READ = 0x80000000

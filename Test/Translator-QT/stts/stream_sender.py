@@ -141,16 +141,28 @@ class WebSocketPCMClient:
                     try:
                         data = json.loads(msg)
 
-                        if "text" in data:
-                            sender = data.get("sender", "unknown")
-                            print(f"[TRANSCRIPT] From {sender.upper()}")
+                        if data.get("type") == "transcript_with_audio":
+                            transcript_data = data["data"]
+                            text = transcript_data["text"]
+                            role = transcript_data["role"]
+                            audio_bytes = bytes.fromhex(transcript_data["audio_bytes"])
+
+                            print(f"[TRANSCRIPT] Receive package from Role: {role}")
 
                             if self.transcript_callback:
                                 try:
-                                    self.transcript_callback(data)
-                                    print(f"[TRANSCRIPT] transcript_callback {sender.upper()}")
+                                    self.transcript_callback({
+                                        "text": text,
+                                        "sender": role
+                                    })
                                 except Exception as e:
-                                    print(f"[CALLBACK ERROR] {e}")         
+                                    print(f"[CALLBACK ERROR - transcript] {e}")
+
+                            if self.audio_callback:
+                                try:
+                                    self.audio_callback(audio_bytes)
+                                except Exception as e:
+                                    print(f"[CALLBACK ERROR - audio] {e}")
 
                     except json.JSONDecodeError:
                         if msg.strip().lower() == "ping":
@@ -158,9 +170,6 @@ class WebSocketPCMClient:
                         else:
                             print("[WS WARNING] Received unparseable string:", msg)
 
-                elif isinstance(msg, bytes):
-                    if self.audio_callback:
-                        self.audio_callback(msg)
 
             except Exception as e:
                 print("[WS RECEIVER ERROR]", e)
